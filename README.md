@@ -139,12 +139,20 @@ Before using this system, ensure you have the following prerequisites:
    1. Go to the [Rhubarb Lip-Sync releases page](https://github.com/DanielSWolf/rhubarb-lip-sync/releases).
    2. Download the latest version for your operating system (Linux, macOS, or Windows).
    3. Create a `bin/` directory in the project root (if it doesn't already exist).
-   4. Extract the downloaded archive and copy the `rhubarb` binary (or `rhubarb.exe` on Windows) into the `bin/` directory.
+   4. Extract the **entire contents** of the downloaded archive into the `bin/` directory. This includes the `rhubarb` binary **and** the `res/` folder (which contains required PocketSphinx dictionary files). Your `bin/` directory should look like:
+      ```
+      bin/
+      ├── rhubarb (or rhubarb.exe on Windows)
+      └── res/
+          └── sphinx/
+              ├── cmudict-en-us.dict
+              └── ...
+      ```
    5. On Linux/macOS, make sure the binary is executable:
       ```bash
       chmod +x bin/rhubarb
       ```
-   > **Note:** If Rhubarb is not found, the app will still run but lip sync will be empty (the avatar's mouth won't move). You'll see a warning in the console.
+   > **Note:** If Rhubarb is not found or fails to run, the app will still work but lip sync will be empty (the avatar's mouth won't move). You'll see a warning in the console with details about what went wrong.
 3. **ffmpeg:** Install `ffmpeg` for [Mac OS](https://formulae.brew.sh/formula/ffmpeg), [Linux](https://ffmpeg.org/download.html), or [Windows](https://ffmpeg.org/download.html).
 
 ### Installation
