@@ -143,11 +143,19 @@ def generate_lip_sync(message_index):
     )
 
     if os.path.isfile(RHUBARB_BIN):
-        subprocess.run(
+        result = subprocess.run(
             [RHUBARB_BIN, "-f", "json", "-o", json_path, wav_path, "-r", "phonetic"],
             capture_output=True,
-            check=True,
         )
+        if result.returncode != 0:
+            print(f"WARNING: Rhubarb failed with exit code {result.returncode}.")
+            if result.stderr:
+                print(f"Rhubarb stderr: {result.stderr.decode(errors='replace')}")
+            if result.stdout:
+                print(f"Rhubarb stdout: {result.stdout.decode(errors='replace')}")
+            empty_lipsync = {"metadata": {"duration": 0}, "mouthCues": []}
+            with open(json_path, "w") as f:
+                json.dump(empty_lipsync, f)
     else:
         print(f"WARNING: Rhubarb binary not found at {RHUBARB_BIN}. Lip sync will be empty. Download from https://github.com/DanielSWolf/rhubarb-lip-sync/releases")
         empty_lipsync = {"metadata": {"duration": 0}, "mouthCues": []}
