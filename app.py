@@ -16,7 +16,7 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyDnBEh4AdVOcZavxWPKVgWMGOnzFhUB7Hk")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 EDGE_TTS_VOICE = os.getenv("EDGE_TTS_VOICE", "en-US-GuyNeural")
 
 AUDIOS_DIR = os.path.join(os.path.dirname(__file__), "audios")
@@ -233,7 +233,7 @@ def sts():
 
         if GEMINI_API_KEY:
             genai.configure(api_key=GEMINI_API_KEY)
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel("gemini-2.5-flash")
             with open(tmp_out_path, "rb") as audio_file:
                 audio_data = audio_file.read()
             response = model.generate_content(
