@@ -134,62 +134,51 @@ The system operates through two primary workflows, depending on whether the user
 ### Requirements
 Before using this system, ensure you have the following prerequisites:
 
-1. **OpenAI Subscription:** You must have an active subscription with OpenAI. If you don't have one, you can create it [here](https://openai.com/product).
-2. **Eleven Labs Subscription:** You need to have a subscription with Eleven Labs. If you don't have one yet, you can
-   sign up [here](https://elevenlabs.io/). 
-It's recommended to have the paid version. With the free version, the avatar doesn't work well due to an error caused by too many requests.
-3. **Rhubarb Lip-Sync:** Download the latest version of Rhubarb Lip-Sync compatible with your operating system from the
-   official [Rhubarb Lip-Sync repository](https://github.com/DanielSWolf/rhubarb-lip-sync/releases). Once downloaded,
-   create a `/bin` directory in the backend and move all the contents of the unzipped `rhubarb-lip-sync.zip` into it.
-   Sometimes, the operating system requests permissions, so you need to enable them.
-4. Install `ffmpeg` for  [Mac OS](https://formulae.brew.sh/formula/ffmpeg), [Linux](https://ffmpeg.org/download.html) or [Windows](https://ffmpeg.org/download.html).
+1. **Gemini API Key:** You need a Google Gemini API key. Get one from [Google AI Studio](https://aistudio.google.com/app/apikey).
+2. **Rhubarb Lip-Sync (required for lip sync):** This is a critical dependency that is **not included** in the repository. You must download and set it up manually:
+   1. Go to the [Rhubarb Lip-Sync releases page](https://github.com/DanielSWolf/rhubarb-lip-sync/releases).
+   2. Download the latest version for your operating system (Linux, macOS, or Windows).
+   3. Create a `bin/` directory in the project root (if it doesn't already exist).
+   4. Extract the downloaded archive and copy the `rhubarb` binary (or `rhubarb.exe` on Windows) into the `bin/` directory.
+   5. On Linux/macOS, make sure the binary is executable:
+      ```bash
+      chmod +x bin/rhubarb
+      ```
+   > **Note:** If Rhubarb is not found, the app will still run but lip sync will be empty (the avatar's mouth won't move). You'll see a warning in the console.
+3. **ffmpeg:** Install `ffmpeg` for [Mac OS](https://formulae.brew.sh/formula/ffmpeg), [Linux](https://ffmpeg.org/download.html), or [Windows](https://ffmpeg.org/download.html).
 
 ### Installation
 
 1. Clone this repository:
-  
+
 ```bash
-git@github.com:asanchezyali/talking-avatar-with-ai.git
+git clone https://github.com/Raulji-Ranpriyasinh/AI-avtar.git
 ```
 
 2. Navigate to the project directory:
 
 ```bash
-cd digital-human
+cd AI-avtar
 ```
 
-3. Install dependencies for monorepo:
+3. Install Python dependencies:
 ```bash
-yarn
-```
-4. Create a .env file in the root `/apps/backend/` of the project and add the following environment variables:
-
-```bash
-# OPENAI
-OPENAI_MODEL=<YOUR_GPT_MODEL>
-OPENAI_API_KEY=<YOUR_OPENAI_API_KEY>
-
-# Elevenlabs
-ELEVEN_LABS_API_KEY=<YOUR_ELEVEN_LABS_API_KEY>
-ELVEN_LABS_VOICE_ID=<YOUR_ELEVEN_LABS_VOICE_ID>
-ELEVEN_LABS_MODEL_ID=<YOUR_ELEVEN_LABS_MODEL_ID>
+pip install -r requirements.txt
 ```
 
-5. Run the development system:
+4. Create a `.env` file in the project root and add your API key:
 
 ```bash
-yarn dev
+GEMINI_API_KEY=<YOUR_GEMINI_API_KEY>
 ```
 
-6. If you need install another dependence in the monorepo, you can do this:
+5. Run the application:
 
 ```bash
-yarn add --dev -W <PACKAGE_NAME>
-yarn
+python app.py
 ```
 
-
-Open [http://localhost:5173/](http://localhost:5173/) with your browser to see the result.
+Open [http://localhost:3000/](http://localhost:3000/) with your browser to see the result.
 
 ## References
 * How ChatGPT, Bard and other LLMs are signaling an evolution for AI digital humans: https://www.digitalhumans.com/blog/how-chatgpt-bard-and-other-llms-are-signaling-an-evolution-for-ai-digital-humans
