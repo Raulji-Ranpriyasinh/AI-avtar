@@ -16,7 +16,7 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyDnBEh4AdVOcZavxWPKVgWMGOnzFhUB7Hk")
 EDGE_TTS_VOICE = os.getenv("EDGE_TTS_VOICE", "en-US-GuyNeural")
 
 AUDIOS_DIR = os.path.join(os.path.dirname(__file__), "audios")
@@ -102,7 +102,7 @@ def get_default_messages(user_message):
 
 def chat_with_gemini(user_message):
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-2.5-flash")
     response = model.generate_content(
         [
             {"role": "user", "parts": [{"text": SYSTEM_PROMPT}]},
