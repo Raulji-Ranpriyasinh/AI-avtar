@@ -83,7 +83,7 @@ const visemesMapping = {
   A: "viseme_PP",
   B: "viseme_kk",
   C: "viseme_I",
-  D: "viseme_AA",
+  D: "viseme_aa",
   E: "viseme_O",
   F: "viseme_U",
   G: "viseme_FF",

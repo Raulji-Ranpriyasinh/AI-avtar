@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import os
+import platform
 import subprocess
 import tempfile
 
@@ -21,7 +22,10 @@ EDGE_TTS_VOICE = os.getenv("EDGE_TTS_VOICE", "en-US-GuyNeural")
 
 AUDIOS_DIR = os.path.join(os.path.dirname(__file__), "audios")
 BIN_DIR = os.path.join(os.path.dirname(__file__), "bin")
-RHUBARB_BIN = os.path.join(BIN_DIR, "rhubarb")
+if platform.system() == "Windows":
+    RHUBARB_BIN = os.path.join(BIN_DIR, "rhubarb.exe")
+else:
+    RHUBARB_BIN = os.path.join(BIN_DIR, "rhubarb")
 
 SYSTEM_PROMPT = """You are Jack, a world traveler.
 You will always respond with a JSON array of messages, with a maximum of 3 messages.
@@ -139,12 +143,21 @@ def generate_lip_sync(message_index):
     )
 
     if os.path.isfile(RHUBARB_BIN):
-        subprocess.run(
+        result = subprocess.run(
             [RHUBARB_BIN, "-f", "json", "-o", json_path, wav_path, "-r", "phonetic"],
             capture_output=True,
-            check=True,
         )
+        if result.returncode != 0:
+            print(f"WARNING: Rhubarb failed with exit code {result.returncode}.")
+            if result.stderr:
+                print(f"Rhubarb stderr: {result.stderr.decode(errors='replace')}")
+            if result.stdout:
+                print(f"Rhubarb stdout: {result.stdout.decode(errors='replace')}")
+            empty_lipsync = {"metadata": {"duration": 0}, "mouthCues": []}
+            with open(json_path, "w") as f:
+                json.dump(empty_lipsync, f)
     else:
+        print(f"WARNING: Rhubarb binary not found at {RHUBARB_BIN}. Lip sync will be empty. Download from https://github.com/DanielSWolf/rhubarb-lip-sync/releases")
         empty_lipsync = {"metadata": {"duration": 0}, "mouthCues": []}
         with open(json_path, "w") as f:
             json.dump(empty_lipsync, f)
