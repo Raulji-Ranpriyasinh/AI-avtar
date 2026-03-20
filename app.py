@@ -234,7 +234,8 @@ def sts():
         if GEMINI_API_KEY:
             genai.configure(api_key=GEMINI_API_KEY)
             model = genai.GenerativeModel("gemini-1.5-flash")
-            audio_data = open(tmp_out_path, "rb").read()
+            with open(tmp_out_path, "rb") as audio_file:
+                audio_data = audio_file.read()
             response = model.generate_content(
                 [
                     "Transcribe this audio to text. Return ONLY the transcribed text, nothing else.",
