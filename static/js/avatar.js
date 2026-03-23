@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { facialExpressions, visemesMapping, morphTargets } from "./constants.js";
 import { getState, onMessagePlayed, subscribe } from "./speech.js";
 
@@ -127,6 +128,7 @@ function updateFrame() {
 function loadAvatar(targetScene) {
   scene = targetScene;
   const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder);
 
   return new Promise((resolve, reject) => {
     loader.load(
@@ -160,7 +162,12 @@ function loadAvatar(targetScene) {
             resolve();
           },
           undefined,
-          reject
+          (animError) => {
+            console.warn("animations.glb not found, continuing without body animations:", animError);
+            startBlinking();
+            subscribe(onSpeechUpdate);
+            resolve();
+          }
         );
       },
       undefined,
