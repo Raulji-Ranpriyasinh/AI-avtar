@@ -68,7 +68,21 @@ function init() {
   window.addEventListener("resize", onWindowResize);
 
   loadAvatar(scene)
-    .then(() => {
+    .then((avatarInfo) => {
+      if (avatarInfo) {
+        const { center, size } = avatarInfo;
+        // Frame upper body: target at about 70% of model height
+        const targetY = size.y * 0.7;
+        controls.target.set(center.x, targetY, center.z);
+
+        // Position camera to frame the upper body
+        const fovRad = camera.fov * (Math.PI / 180);
+        const frameHeight = size.y * 0.5;
+        const distance = frameHeight / (2 * Math.tan(fovRad / 2));
+        camera.position.set(center.x, targetY, center.z + distance);
+        camera.updateProjectionMatrix();
+        controls.update();
+      }
       hideLoader();
       animate();
     })

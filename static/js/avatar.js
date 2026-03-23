@@ -15,12 +15,96 @@ let currentAudio = null;
 let blink = false;
 let blinkTimeout = null;
 let avatarScene = null;
+let morphNameMap = {};
+
+function buildMorphNameMap() {
+  if (!avatarScene) return;
+
+  const availableTargets = new Set();
+  avatarScene.traverse((child) => {
+    if (child.isSkinnedMesh && child.morphTargetDictionary) {
+      Object.keys(child.morphTargetDictionary).forEach((name) =>
+        availableTargets.add(name)
+      );
+    }
+  });
+
+  if (availableTargets.size === 0) return;
+
+  // If the model already uses standard ARKit names, no mapping needed
+  if (availableTargets.has("eyeBlinkLeft") || availableTargets.has("viseme_PP")) {
+    return;
+  }
+
+  // Map from standard ARKit names to VALID-style morph target names
+  const mappingRules = {
+    eyeBlinkLeft: ["LeyeClose"],
+    eyeBlinkRight: ["ReyeClose"],
+    eyeSquintLeft: ["Lsquint"],
+    eyeSquintRight: ["Rsquint"],
+    eyeWideLeft: ["LeyeOpen"],
+    eyeWideRight: ["ReyeOpen"],
+    eyeLookDownLeft: ["LlowLid"],
+    eyeLookDownRight: ["RlowLid"],
+    browDownLeft: ["LbrowDown"],
+    browDownRight: ["RbrowDown"],
+    browInnerUp: ["RbrowUp"],
+    browOuterUpLeft: ["LLbrowUp"],
+    browOuterUpRight: ["RRbrowUp"],
+    jawOpen: ["MouthOpen"],
+    mouthOpen: ["MouthOpen"],
+    mouthSmileLeft: ["LsmileOpen"],
+    mouthSmileRight: ["RsmileOpen"],
+    mouthFrownLeft: ["LmouthSad"],
+    mouthFrownRight: ["RmouthSad"],
+    mouthPucker: ["Kiss"],
+    noseSneerLeft: ["Lnostril"],
+    noseSneerRight: ["Rnostril"],
+    cheekPuff: ["Rblow"],
+    mouthClose: ["JawCompress"],
+    jawForward: ["JawFront"],
+    jawLeft: ["Ljaw"],
+    jawRight: ["Rjaw"],
+    mouthShrugLower: ["Chin"],
+    tongueOut: ["OutMiddle_tg"],
+    viseme_aa: ["AE_AA"],
+    viseme_O: ["AO_a"],
+    viseme_E: ["Ax_E"],
+    viseme_I: ["TD_I"],
+    viseme_U: ["UW_U"],
+    viseme_FF: ["FV"],
+    viseme_SS: [".S_h"],
+    viseme_CH: ["SH_CH"],
+    viseme_PP: ["MPB_Up"],
+    viseme_kk: ["KG"],
+    viseme_TH: ["H_EST"],
+    viseme_DD: ["TD_I"],
+  };
+
+  for (const [expected, keywords] of Object.entries(mappingRules)) {
+    if (morphNameMap[expected]) continue;
+    for (const keyword of keywords) {
+      for (const actual of availableTargets) {
+        if (actual.includes(keyword)) {
+          morphNameMap[expected] = actual;
+          break;
+        }
+      }
+      if (morphNameMap[expected]) break;
+    }
+  }
+
+  if (Object.keys(morphNameMap).length > 0) {
+    console.log("Morph target name mapping applied:", morphNameMap);
+  }
+}
 
 function lerpMorphTarget(target, value, speed) {
   if (!avatarScene) return;
+  const actualTarget = morphNameMap[target] || target;
   avatarScene.traverse((child) => {
     if (child.isSkinnedMesh && child.morphTargetDictionary) {
-      const index = child.morphTargetDictionary[target];
+      const index = child.morphTargetDictionary[actualTarget];
       if (index === undefined || child.morphTargetInfluences[index] === undefined) {
         return;
       }
@@ -136,9 +220,24 @@ function loadAvatar(targetScene) {
       (avatarGltf) => {
         avatarScene = avatarGltf.scene;
         avatarGroup = new THREE.Group();
-        avatarGroup.position.set(0, -0.5, 0);
         avatarGroup.add(avatarScene);
         scene.add(avatarGroup);
+
+        // Compute bounding box and position model so feet are at y=0
+        avatarGroup.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(avatarGroup);
+        avatarGroup.position.y = -box.min.y;
+
+        // Recompute bounding box after repositioning
+        avatarGroup.updateMatrixWorld(true);
+        const finalBox = new THREE.Box3().setFromObject(avatarGroup);
+        const avatarBounds = {
+          center: finalBox.getCenter(new THREE.Vector3()),
+          size: finalBox.getSize(new THREE.Vector3()),
+        };
+
+        // Build morph target name mapping for non-standard models
+        buildMorphNameMap();
 
         loader.load(
           "/static/models/animations.glb",
@@ -168,7 +267,53 @@ function loadAvatar(targetScene) {
               );
               startBlinking();
               subscribe(onSpeechUpdate);
-              resolve();
+              resolve(avatarBounds);
+              return;
+            }
+
+            // Additional check: verify skeleton transforms are compatible
+            // Compares bone scale and position magnitude to detect rig mismatches
+            // (e.g. Daz rigs use cm scale 0.01 vs Mixamo rigs at scale 1.0)
+            let transformsCompatible = true;
+            const animRoot = animGltf.scene;
+            animRoot.updateMatrixWorld(true);
+            const checkBones = ["Hips", "Spine", "Head"];
+            for (const boneName of checkBones) {
+              const avatarBone = avatarGroup.getObjectByName(boneName);
+              const animBone = animRoot.getObjectByName(boneName);
+              if (avatarBone && animBone) {
+                // Check scale compatibility
+                const sRatio = avatarBone.scale.x / (animBone.scale.x || 1);
+                if (sRatio > 5 || sRatio < 0.2) {
+                  transformsCompatible = false;
+                  console.warn(
+                    `Bone "${boneName}" scale mismatch: avatar=${avatarBone.scale.x.toFixed(4)}, anim=${animBone.scale.x.toFixed(4)}`
+                  );
+                  break;
+                }
+                // Check position magnitude compatibility
+                const avatarPosMag = avatarBone.position.length();
+                const animPosMag = animBone.position.length();
+                if (avatarPosMag > 0.01 && animPosMag > 0.01) {
+                  const pRatio = avatarPosMag / animPosMag;
+                  if (pRatio > 10 || pRatio < 0.1) {
+                    transformsCompatible = false;
+                    console.warn(
+                      `Bone "${boneName}" position magnitude mismatch: avatar=${avatarPosMag.toFixed(4)}, anim=${animPosMag.toFixed(4)}`
+                    );
+                    break;
+                  }
+                }
+              }
+            }
+
+            if (!transformsCompatible) {
+              console.warn(
+                "Animation skeleton transforms are incompatible with avatar. Skipping body animations to avoid distortion."
+              );
+              startBlinking();
+              subscribe(onSpeechUpdate);
+              resolve(avatarBounds);
               return;
             }
 
@@ -196,14 +341,14 @@ function loadAvatar(targetScene) {
 
             startBlinking();
             subscribe(onSpeechUpdate);
-            resolve();
+            resolve(avatarBounds);
           },
           undefined,
           (animError) => {
             console.warn("animations.glb not found, continuing without body animations:", animError);
             startBlinking();
             subscribe(onSpeechUpdate);
-            resolve();
+            resolve(avatarBounds);
           }
         );
       },
