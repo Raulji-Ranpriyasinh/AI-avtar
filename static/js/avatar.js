@@ -174,8 +174,8 @@ function startBlinking() {
 }
 
 // Animation groups for intelligent cycling
-const TALKING_ANIMS = ["TalkingOne", "TalkingTwo", "TalkingThree"];
-const IDLE_ANIMS = ["Idle", "HappyIdle"];
+const TALKING_ANIMS = ["TalkingOne", "TalkingTwo", "TalkingThree", "TalkingFour", "TalkingFive"];
+const IDLE_ANIMS = ["Idle", "HappyIdle", "Thinking", "Bored"];
 
 function pickTalkingAnimation(hint) {
   // Build list of available talking animations from loaded actions
