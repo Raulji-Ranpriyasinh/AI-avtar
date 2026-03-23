@@ -37,6 +37,8 @@ function buildMorphNameMap() {
   }
 
   // Map from standard ARKit names to VALID-style morph target names
+  // Each value is an array of keywords to search for in the model's morph target names.
+  // If the value is an array of arrays, ALL matching targets are driven together (multi-target).
   const mappingRules = {
     eyeBlinkLeft: ["LeyeClose"],
     eyeBlinkRight: ["ReyeClose"],
@@ -48,7 +50,6 @@ function buildMorphNameMap() {
     eyeLookDownRight: ["RlowLid"],
     browDownLeft: ["LbrowDown"],
     browDownRight: ["RbrowDown"],
-    browInnerUp: ["RbrowUp"],
     browOuterUpLeft: ["LLbrowUp"],
     browOuterUpRight: ["RRbrowUp"],
     jawOpen: ["MouthOpen"],
@@ -60,7 +61,6 @@ function buildMorphNameMap() {
     mouthPucker: ["Kiss"],
     noseSneerLeft: ["Lnostril"],
     noseSneerRight: ["Rnostril"],
-    cheekPuff: ["Rblow"],
     mouthClose: ["JawCompress"],
     jawForward: ["JawFront"],
     jawLeft: ["Ljaw"],
@@ -81,6 +81,12 @@ function buildMorphNameMap() {
     viseme_DD: ["TD_I"],
   };
 
+  // Multi-target mappings: one ARKit name drives multiple VALID targets simultaneously
+  const multiMappingRules = {
+    browInnerUp: [["RbrowUp"], ["LbrowUp"]],
+    cheekPuff: [["Rblow"], ["Lblow"]],
+  };
+
   for (const [expected, keywords] of Object.entries(mappingRules)) {
     if (morphNameMap[expected]) continue;
     for (const keyword of keywords) {
@@ -94,6 +100,24 @@ function buildMorphNameMap() {
     }
   }
 
+  // Process multi-target mappings
+  for (const [expected, keywordSets] of Object.entries(multiMappingRules)) {
+    const matches = [];
+    for (const keywords of keywordSets) {
+      for (const keyword of keywords) {
+        for (const actual of availableTargets) {
+          if (actual.includes(keyword)) {
+            matches.push(actual);
+            break;
+          }
+        }
+      }
+    }
+    if (matches.length > 0) {
+      morphNameMap[expected] = matches;
+    }
+  }
+
   if (Object.keys(morphNameMap).length > 0) {
     console.log("Morph target name mapping applied:", morphNameMap);
   }
@@ -101,18 +125,23 @@ function buildMorphNameMap() {
 
 function lerpMorphTarget(target, value, speed) {
   if (!avatarScene) return;
-  const actualTarget = morphNameMap[target] || target;
+  const mapped = morphNameMap[target];
+  const targets = mapped
+    ? Array.isArray(mapped) ? mapped : [mapped]
+    : [target];
   avatarScene.traverse((child) => {
     if (child.isSkinnedMesh && child.morphTargetDictionary) {
-      const index = child.morphTargetDictionary[actualTarget];
-      if (index === undefined || child.morphTargetInfluences[index] === undefined) {
-        return;
+      for (const t of targets) {
+        const index = child.morphTargetDictionary[t];
+        if (index === undefined || child.morphTargetInfluences[index] === undefined) {
+          continue;
+        }
+        child.morphTargetInfluences[index] = THREE.MathUtils.lerp(
+          child.morphTargetInfluences[index],
+          value,
+          speed
+        );
       }
-      child.morphTargetInfluences[index] = THREE.MathUtils.lerp(
-        child.morphTargetInfluences[index],
-        value,
-        speed
-      );
     }
   });
 }
@@ -207,6 +236,151 @@ function updateFrame() {
       lerpMorphTarget(value, 0, 0.1);
     }
   });
+}
+
+function retargetAnimations(animGltf, avatarGroup) {
+  const animRoot = animGltf.scene;
+  animRoot.updateMatrixWorld(true);
+  avatarGroup.updateMatrixWorld(true);
+
+  // Build bone name mapping (animation bone name → avatar bone name)
+  // for bones with slightly different names between rigs
+  const avatarNodeNames = new Set();
+  avatarGroup.traverse((node) => {
+    if (node.name) avatarNodeNames.add(node.name);
+  });
+
+  const animNodeNames = new Set();
+  animRoot.traverse((node) => {
+    if (node.name) animNodeNames.add(node.name);
+  });
+
+  const boneNameMap = {};
+  for (const animName of animNodeNames) {
+    if (avatarNodeNames.has(animName)) continue;
+    // Try common naming variations between Daz and Mixamo rigs
+    const variations = [
+      animName.replace(/_End/g, "End"),
+      animName.replace(/Top_End/g, "End"),
+    ];
+    for (const v of variations) {
+      if (avatarNodeNames.has(v)) {
+        boneNameMap[animName] = v;
+        break;
+      }
+    }
+  }
+
+  // Collect rest transforms from both skeletons
+  const avatarRest = {};
+  avatarGroup.traverse((node) => {
+    if (node.name) {
+      avatarRest[node.name] = {
+        position: node.position.clone(),
+        quaternion: node.quaternion.clone(),
+        scale: node.scale.clone(),
+      };
+    }
+  });
+
+  const animRest = {};
+  animRoot.traverse((node) => {
+    if (node.name) {
+      animRest[node.name] = {
+        position: node.position.clone(),
+        quaternion: node.quaternion.clone(),
+        scale: node.scale.clone(),
+      };
+    }
+  });
+
+  // Retarget each animation clip
+  animGltf.animations.forEach((clip) => {
+    const newTracks = [];
+
+    for (const track of clip.tracks) {
+      const parsed = THREE.PropertyBinding.parseTrackName(track.name);
+      const animBoneName = parsed.nodeName;
+      const avatarBoneName = boneNameMap[animBoneName] || animBoneName;
+
+      const aRest = avatarRest[avatarBoneName];
+      const mRest = animRest[animBoneName];
+      if (!aRest || !mRest) continue;
+
+      const newName = track.name.replace(animBoneName, avatarBoneName);
+      const prop = parsed.propertyName;
+
+      if (prop === "quaternion") {
+        // Rotation retargeting: correction * animFrame
+        // correction = avatarRest * inverse(animRest)
+        // At rest frame this yields avatarRest (identity delta), preserving the avatar's pose.
+        const mRestInv = mRest.quaternion.clone().invert();
+        const correction = aRest.quaternion.clone().multiply(mRestInv);
+
+        const vals = new Float32Array(track.values.length);
+        for (let i = 0; i < track.values.length; i += 4) {
+          const q = new THREE.Quaternion(
+            track.values[i],
+            track.values[i + 1],
+            track.values[i + 2],
+            track.values[i + 3]
+          );
+          q.premultiply(correction);
+          vals[i] = q.x;
+          vals[i + 1] = q.y;
+          vals[i + 2] = q.z;
+          vals[i + 3] = q.w;
+        }
+        newTracks.push(
+          new THREE.QuaternionKeyframeTrack(newName, track.times, vals)
+        );
+      } else if (prop === "position") {
+        const vals = new Float32Array(track.values.length);
+        if (animBoneName === "Hips") {
+          // Root bone: retarget position delta in world space
+          for (let i = 0; i < track.values.length; i += 3) {
+            vals[i] =
+              aRest.position.x + (track.values[i] - mRest.position.x);
+            vals[i + 1] =
+              aRest.position.y + (track.values[i + 1] - mRest.position.y);
+            vals[i + 2] =
+              aRest.position.z + (track.values[i + 2] - mRest.position.z);
+          }
+        } else {
+          // Child bones: keep avatar rest position (rotation handles the motion)
+          for (let i = 0; i < track.values.length; i += 3) {
+            vals[i] = aRest.position.x;
+            vals[i + 1] = aRest.position.y;
+            vals[i + 2] = aRest.position.z;
+          }
+        }
+        newTracks.push(
+          new THREE.VectorKeyframeTrack(newName, track.times, vals)
+        );
+      } else if (prop === "scale") {
+        // Scale retargeting: avatarRest * (animFrame / animRest)
+        const vals = new Float32Array(track.values.length);
+        for (let i = 0; i < track.values.length; i += 3) {
+          vals[i] =
+            aRest.scale.x * (track.values[i] / (mRest.scale.x || 1));
+          vals[i + 1] =
+            aRest.scale.y * (track.values[i + 1] / (mRest.scale.y || 1));
+          vals[i + 2] =
+            aRest.scale.z * (track.values[i + 2] / (mRest.scale.z || 1));
+        }
+        newTracks.push(
+          new THREE.VectorKeyframeTrack(newName, track.times, vals)
+        );
+      }
+    }
+
+    clip.tracks = newTracks;
+  });
+
+  console.log(
+    "Animation retargeting complete. Bone name mappings:",
+    boneNameMap
+  );
 }
 
 function loadAvatar(targetScene) {
@@ -308,16 +482,18 @@ function loadAvatar(targetScene) {
             }
 
             if (!transformsCompatible) {
-              console.warn(
-                "Animation skeleton transforms are incompatible with avatar. Skipping body animations to avoid distortion."
-              );
-              startBlinking();
-              subscribe(onSpeechUpdate);
-              resolve(avatarBounds);
-              return;
+              // Retarget animations to match the avatar's skeleton
+              console.log("Retargeting animations to match avatar skeleton...");
+              retargetAnimations(animGltf, avatarGroup);
+
+              // Rebuild validNodes after retargeting (track names may have changed)
+              validNodes.clear();
+              avatarGroup.traverse((node) => {
+                if (node.name) validNodes.add(node.name);
+              });
             }
 
-            // Skeleton is compatible enough — filter out unmatched tracks and apply
+            // Filter out tracks targeting bones not in the avatar
             mixer = new THREE.AnimationMixer(avatarGroup);
             animGltf.animations.forEach((clip) => {
               clip.tracks = clip.tracks.filter((track) => {
