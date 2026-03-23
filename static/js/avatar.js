@@ -144,6 +144,21 @@ function loadAvatar(targetScene) {
           "/static/models/animations.glb",
           (animGltf) => {
             mixer = new THREE.AnimationMixer(avatarGroup);
+
+            // Collect valid node names from the avatar skeleton
+            const validNodes = new Set();
+            avatarGroup.traverse((node) => {
+              if (node.name) validNodes.add(node.name);
+            });
+
+            // Filter animation tracks to only target bones present in the avatar
+            animGltf.animations.forEach((clip) => {
+              clip.tracks = clip.tracks.filter((track) => {
+                const nodeName = THREE.PropertyBinding.parseTrackName(track.name).nodeName;
+                return validNodes.has(nodeName);
+              });
+            });
+
             animGltf.animations.forEach((clip) => {
               actions[clip.name] = mixer.clipAction(clip);
             });
