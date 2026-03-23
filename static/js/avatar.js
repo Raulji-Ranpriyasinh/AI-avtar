@@ -143,15 +143,37 @@ function loadAvatar(targetScene) {
         loader.load(
           "/static/models/animations.glb",
           (animGltf) => {
-            mixer = new THREE.AnimationMixer(avatarGroup);
-
             // Collect valid node names from the avatar skeleton
             const validNodes = new Set();
             avatarGroup.traverse((node) => {
               if (node.name) validNodes.add(node.name);
             });
 
-            // Filter animation tracks to only target bones present in the avatar
+            // Check skeleton compatibility by counting how many tracks target valid bones
+            let totalTracks = 0;
+            let matchedTracks = 0;
+            animGltf.animations.forEach((clip) => {
+              clip.tracks.forEach((track) => {
+                totalTracks++;
+                const nodeName = THREE.PropertyBinding.parseTrackName(track.name).nodeName;
+                if (validNodes.has(nodeName)) matchedTracks++;
+              });
+            });
+
+            const matchRatio = totalTracks > 0 ? matchedTracks / totalTracks : 0;
+            if (matchRatio < 0.5) {
+              // Skeleton is incompatible — skip body animations to avoid distortion
+              console.warn(
+                `animations.glb skeleton incompatible with avatar (${matchedTracks}/${totalTracks} tracks matched). Skipping body animations.`
+              );
+              startBlinking();
+              subscribe(onSpeechUpdate);
+              resolve();
+              return;
+            }
+
+            // Skeleton is compatible enough — filter out unmatched tracks and apply
+            mixer = new THREE.AnimationMixer(avatarGroup);
             animGltf.animations.forEach((clip) => {
               clip.tracks = clip.tracks.filter((track) => {
                 const nodeName = THREE.PropertyBinding.parseTrackName(track.name).nodeName;
