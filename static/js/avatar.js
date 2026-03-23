@@ -12,6 +12,7 @@ let currentAnimation = "Idle";
 let currentFacialExpression = "";
 let currentLipsync = null;
 let currentAudio = null;
+let lastTalkingAnims = [];
 let blink = false;
 let blinkTimeout = null;
 let avatarScene = null;
@@ -172,11 +173,46 @@ function startBlinking() {
   nextBlink();
 }
 
+// Animation groups for intelligent cycling
+const TALKING_ANIMS = ["TalkingOne", "TalkingTwo", "TalkingThree"];
+const IDLE_ANIMS = ["Idle", "HappyIdle"];
+
+function pickTalkingAnimation(hint) {
+  // Build list of available talking animations from loaded actions
+  const available = TALKING_ANIMS.filter((name) => actions[name]);
+  if (available.length === 0) {
+    // Fallback: try the hint or any loaded action that isn't pure Idle
+    if (hint && actions[hint]) return hint;
+    return "Idle";
+  }
+
+  // Filter out the most recently used ones to avoid repeats
+  let candidates = available.filter((a) => !lastTalkingAnims.includes(a));
+  if (candidates.length === 0) {
+    candidates = available;
+    lastTalkingAnims = [];
+  }
+
+  const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  lastTalkingAnims.push(pick);
+  // Keep history short so older animations become available again
+  if (lastTalkingAnims.length > Math.max(1, available.length - 1)) {
+    lastTalkingAnims.shift();
+  }
+  return pick;
+}
+
+function pickIdleAnimation() {
+  const available = IDLE_ANIMS.filter((name) => actions[name]);
+  if (available.length === 0) return "Idle";
+  return available[Math.floor(Math.random() * available.length)];
+}
+
 function onSpeechUpdate() {
   const state = getState();
   const message = state.currentMessage;
   if (!message) {
-    setAnimation("Idle");
+    setAnimation(pickIdleAnimation());
     currentLipsync = null;
     if (currentAudio) {
       currentAudio.pause();
@@ -184,7 +220,13 @@ function onSpeechUpdate() {
     }
     return;
   }
-  setAnimation(message.animation || "Idle");
+
+  // Choose animation based on the AI's hint but with variety
+  const hint = message.animation || "Idle";
+  const isTalkingHint = TALKING_ANIMS.includes(hint) || hint.startsWith("Talking");
+  const chosenAnim = isTalkingHint ? pickTalkingAnimation(hint) : (actions[hint] ? hint : pickTalkingAnimation(hint));
+  setAnimation(chosenAnim);
+
   currentFacialExpression = message.facialExpression || "default";
   currentLipsync = message.lipsync || null;
 
@@ -306,6 +348,14 @@ function retargetAnimations(animGltf, avatarGroup) {
       const aRest = avatarRest[avatarBoneName];
       const mRest = animRest[animBoneName];
       if (!aRest || !mRest) continue;
+
+      // Skip retargeting for finger and hand detail bones — their rest
+      // poses differ too much between Daz and Mixamo and produce unnatural
+      // claw-like poses.  Keep the avatar's natural rest pose instead.
+      const isFingerBone =
+        /Hand(Thumb|Index|Middle|Ring|Pinky)/i.test(avatarBoneName) ||
+        /FingerBase/i.test(avatarBoneName);
+      if (isFingerBone) continue;
 
       const newName = track.name.replace(animBoneName, avatarBoneName);
       const prop = parsed.propertyName;
