@@ -89,7 +89,7 @@ function onSpeechUpdate() {
 
 function updateFrame() {
   morphTargets.forEach((key) => {
-    if (key === "eyeBlinkLeft" || key === "eyeBlinkRight") return;
+    if (key === "h_expressions.LeyeClose_h" || key === "h_expressions.ReyeClose_h") return;
     const mapping = facialExpressions[currentFacialExpression];
     if (mapping && mapping[key]) {
       lerpMorphTarget(key, mapping[key], 0.1);
@@ -98,8 +98,8 @@ function updateFrame() {
     }
   });
 
-  lerpMorphTarget("eyeBlinkLeft", blink ? 1 : 0, 0.5);
-  lerpMorphTarget("eyeBlinkRight", blink ? 1 : 0, 0.5);
+  lerpMorphTarget("h_expressions.LeyeClose_h", blink ? 1 : 0, 0.5);
+  lerpMorphTarget("h_expressions.ReyeClose_h", blink ? 1 : 0, 0.5);
 
   const appliedMorphTargets = [];
   if (currentAudio && currentLipsync) {
@@ -107,19 +107,23 @@ function updateFrame() {
     for (let i = 0; i < currentLipsync.mouthCues.length; i++) {
       const mouthCue = currentLipsync.mouthCues[i];
       if (currentAudioTime >= mouthCue.start && currentAudioTime <= mouthCue.end) {
-        const viseme = visemesMapping[mouthCue.value];
-        if (viseme) {
-          appliedMorphTargets.push(viseme);
-          lerpMorphTarget(viseme, 1, 0.2);
+        const visemeTargets = visemesMapping[mouthCue.value];
+        if (visemeTargets) {
+          visemeTargets.forEach((target) => {
+            appliedMorphTargets.push(target);
+            lerpMorphTarget(target, 1, 0.2);
+          });
         }
         break;
       }
     }
   }
 
-  Object.values(visemesMapping).forEach((value) => {
-    if (!appliedMorphTargets.includes(value)) {
-      lerpMorphTarget(value, 0, 0.1);
+  // Reset all viseme morph targets that are not currently active
+  const allVisemeTargets = Object.values(visemesMapping).flat();
+  allVisemeTargets.forEach((target) => {
+    if (!appliedMorphTargets.includes(target)) {
+      lerpMorphTarget(target, 0, 0.1);
     }
   });
 }
