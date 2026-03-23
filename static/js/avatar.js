@@ -152,9 +152,11 @@ function setAnimation(name) {
   const prevAction = actions[currentAnimation];
   const nextAction = actions[name];
   if (nextAction) {
-    nextAction.reset().fadeIn(prevAction ? 0.5 : 0).play();
+    // Use longer crossfade for smoother, more natural transitions
+    const fadeDuration = 0.8;
+    nextAction.reset().fadeIn(prevAction ? fadeDuration : 0).play();
     if (prevAction) {
-      prevAction.fadeOut(0.5);
+      prevAction.fadeOut(fadeDuration);
     }
     currentAnimation = name;
   }
@@ -174,8 +176,15 @@ function startBlinking() {
 }
 
 // Animation groups for intelligent cycling
-const TALKING_ANIMS = ["TalkingOne", "TalkingTwo", "TalkingThree"];
-const IDLE_ANIMS = ["Idle", "HappyIdle"];
+const TALKING_ANIMS = ["TalkingOne", "TalkingTwo", "TalkingThree", "TalkingFour", "TalkingFive"];
+const IDLE_ANIMS = ["Idle"];
+// Gesture/emotion animations that should be used exactly as the AI requests
+const GESTURE_ANIMS = [
+  "Angry", "Defeated", "Surprised", "DismissingGesture", "Thinking",
+  "Agreeing", "Disagreeing", "Excited", "Sad", "Happy", "Shrugging",
+  "Concerned", "Proud", "Confused", "Bored", "Laughing", "Nervous", "Dance",
+  "ThoughtfulHeadShake", "HappyIdle", "SadIdle"
+];
 
 function pickTalkingAnimation(hint) {
   // Build list of available talking animations from loaded actions
@@ -212,7 +221,7 @@ function onSpeechUpdate() {
   const state = getState();
   const message = state.currentMessage;
   if (!message) {
-    setAnimation(pickIdleAnimation());
+    setAnimation("Idle");
     currentLipsync = null;
     if (currentAudio) {
       currentAudio.pause();
@@ -221,10 +230,23 @@ function onSpeechUpdate() {
     return;
   }
 
-  // Choose animation based on the AI's hint but with variety
+  // Respect the AI's animation choice — gesture/emotion animations are used
+  // directly to match conversational context; only talking hints get variety.
   const hint = message.animation || "Idle";
-  const isTalkingHint = TALKING_ANIMS.includes(hint) || hint.startsWith("Talking");
-  const chosenAnim = isTalkingHint ? pickTalkingAnimation(hint) : (actions[hint] ? hint : pickTalkingAnimation(hint));
+  let chosenAnim;
+  if (GESTURE_ANIMS.includes(hint) && actions[hint]) {
+    // Use the exact gesture/emotion the AI chose
+    chosenAnim = hint;
+  } else if (TALKING_ANIMS.includes(hint) || hint.startsWith("Talking")) {
+    // Cycle through talking animations for variety
+    chosenAnim = pickTalkingAnimation(hint);
+  } else if (actions[hint]) {
+    // Any other valid animation — use it directly
+    chosenAnim = hint;
+  } else {
+    // Unknown animation name — fall back to a talking animation
+    chosenAnim = pickTalkingAnimation(hint);
+  }
   setAnimation(chosenAnim);
 
   currentFacialExpression = message.facialExpression || "default";
