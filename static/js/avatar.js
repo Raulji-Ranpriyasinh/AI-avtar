@@ -433,6 +433,75 @@ function retargetAnimations(animGltf, avatarGroup) {
   );
 }
 
+/**
+ * Remap animation bone names to match the avatar skeleton.
+ * Handles common naming differences such as the "mixamorig" prefix
+ * used by Mixamo exports and "_End" suffix variations.
+ */
+function remapAnimationBoneNames(animGltf, targetGroup) {
+  const avatarNodeNames = new Set();
+  targetGroup.traverse((node) => {
+    if (node.name) avatarNodeNames.add(node.name);
+  });
+
+  const animRoot = animGltf.scene;
+  const nameMap = {};
+  const visited = new Set();
+
+  animRoot.traverse((node) => {
+    if (!node.name || visited.has(node.name) || avatarNodeNames.has(node.name)) return;
+    visited.add(node.name);
+
+    // Strip common Mixamo prefix
+    let base = node.name;
+    const prefixMatch = base.match(/^[Mm]ixamorig:?/);
+    if (prefixMatch) {
+      base = base.slice(prefixMatch[0].length);
+    }
+
+    // Build candidate names with _End / Top_End normalisation
+    const candidates = [base];
+    if (base.includes("_End")) {
+      candidates.push(base.replace(/_End/g, "End"));
+    }
+    if (base.includes("Top_End")) {
+      candidates.push(base.replace(/Top_End/g, "End"));
+    }
+
+    for (const candidate of candidates) {
+      if (candidate !== node.name && avatarNodeNames.has(candidate)) {
+        nameMap[node.name] = candidate;
+        break;
+      }
+    }
+  });
+
+  if (Object.keys(nameMap).length === 0) return;
+
+  // Rename nodes in the animation scene
+  animRoot.traverse((node) => {
+    if (nameMap[node.name]) {
+      node.name = nameMap[node.name];
+    }
+  });
+
+  // Rename track target node names in all animation clips
+  animGltf.animations.forEach((clip) => {
+    clip.tracks.forEach((track) => {
+      const parsed = THREE.PropertyBinding.parseTrackName(track.name);
+      const mapped = nameMap[parsed.nodeName];
+      if (mapped) {
+        track.name = mapped + track.name.slice(parsed.nodeName.length);
+      }
+    });
+  });
+
+  console.log(
+    `Remapped ${Object.keys(nameMap).length} animation bone names to match avatar:`,
+    nameMap
+  );
+}
+
 function loadAvatar(targetScene) {
   scene = targetScene;
   const loader = new GLTFLoader();
@@ -466,6 +535,10 @@ function loadAvatar(targetScene) {
         loader.load(
           "/static/models/animations.glb",
           (animGltf) => {
+            // Remap animation bone names to match avatar skeleton
+            // (e.g. strip "mixamorig" prefix from Mixamo exports)
+            remapAnimationBoneNames(animGltf, avatarGroup);
+
             // Collect valid node names from the avatar skeleton
             const validNodes = new Set();
             avatarGroup.traverse((node) => {
