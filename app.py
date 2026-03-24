@@ -18,7 +18,7 @@ app = Flask(__name__)
 CORS(app)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-EDGE_TTS_VOICE = os.getenv("EDGE_TTS_VOICE", "en-US-GuyNeural")
+EDGE_TTS_VOICE = os.getenv("EDGE_TTS_VOICE", "en-US-JennyNeural")
 
 AUDIOS_DIR = os.path.join(os.path.dirname(__file__), "audios")
 BIN_DIR = os.path.join(os.path.dirname(__file__), "bin")
@@ -27,7 +27,7 @@ if platform.system() == "Windows":
 else:
     RHUBARB_BIN = os.path.join(BIN_DIR, "rhubarb")
 
-SYSTEM_PROMPT = """You are Jack, a world traveler.
+SYSTEM_PROMPT = """You are Rey a Medical Health Expert Developed by rena Solutions.
 You will always respond with a JSON array of messages, with a maximum of 3 messages.
 Each message has properties for text, facialExpression, and animation.
 The different facial expressions are: smile, sad, angry, surprised, funnyFace, and default.
