@@ -485,11 +485,14 @@ function findPoseBones(group) {
 function createProfessionalIdleClip(avatarGroup, deltas) {
   const bones = findPoseBones(avatarGroup);
 
-  // Store references for the control panel
+  // Store bone references for the control panel.
+  // Only capture rest quaternions on the FIRST call (before any pose is applied)
+  // to prevent drift when rebuildIdleWithDeltas re-invokes this function.
   poseBones = bones;
-  poseRestQuaternions = {};
-  for (const [key, bone] of Object.entries(bones)) {
-    poseRestQuaternions[key] = bone.quaternion.clone();
+  if (Object.keys(poseRestQuaternions).length === 0) {
+    for (const [key, bone] of Object.entries(bones)) {
+      poseRestQuaternions[key] = bone.quaternion.clone();
+    }
   }
 
   const foundBones = Object.keys(bones);
