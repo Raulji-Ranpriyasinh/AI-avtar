@@ -18,6 +18,10 @@ let blinkTimeout = null;
 let avatarScene = null;
 let morphNameMap = {};
 
+// Pose editor state — stores references to arm/hand bones for the control panel
+let poseBones = {};
+let poseRestQuaternions = {};
+
 function buildMorphNameMap() {
   if (!avatarScene) return;
 
@@ -441,30 +445,52 @@ function retargetAnimations(animGltf, avatarGroup) {
   );
 }
 
-function createProfessionalIdleClip(avatarGroup) {
-  // Search for arm bones using common naming patterns (Mixamo, Daz, generic)
-  const boneSearchNames = {
-    leftUpperArm: ["LeftArm", "lShldrBend", "mixamorig:LeftArm"],
-    rightUpperArm: ["RightArm", "rShldrBend", "mixamorig:RightArm"],
-    leftForeArm: ["LeftForeArm", "lForearmBend", "mixamorig:LeftForeArm"],
-    rightForeArm: ["RightForeArm", "rForearmBend", "mixamorig:RightForeArm"],
-    leftHand: ["LeftHand", "lHand", "mixamorig:LeftHand"],
-    rightHand: ["RightHand", "rHand", "mixamorig:RightHand"],
-  };
+// Bone search patterns shared by pose creation and control panel
+const POSE_BONE_SEARCH = {
+  leftUpperArm: ["LeftArm", "lShldrBend", "mixamorig:LeftArm"],
+  rightUpperArm: ["RightArm", "rShldrBend", "mixamorig:RightArm"],
+  leftForeArm: ["LeftForeArm", "lForearmBend", "mixamorig:LeftForeArm"],
+  rightForeArm: ["RightForeArm", "rForearmBend", "mixamorig:RightForeArm"],
+  leftHand: ["LeftHand", "lHand", "mixamorig:LeftHand"],
+  rightHand: ["RightHand", "rHand", "mixamorig:RightHand"],
+};
 
+// Default professional pose delta values (radians)
+const DEFAULT_POSE_DELTAS = {
+  leftUpperArm:  { x: 0.35, y: 0.15, z: 1.15 },
+  rightUpperArm: { x: 0.35, y: -0.15, z: -1.15 },
+  leftForeArm:   { x: -0.2, y: 1.4, z: 0.1 },
+  rightForeArm:  { x: -0.2, y: -1.4, z: 0.1 },
+  leftHand:      { x: 0.1, y: 0.2, z: -0.1 },
+  rightHand:     { x: 0.1, y: -0.2, z: 0.1 },
+};
+
+function findPoseBones(group) {
   const bones = {};
-  avatarGroup.traverse((node) => {
-    for (const [key, names] of Object.entries(boneSearchNames)) {
+  group.traverse((node) => {
+    for (const [key, names] of Object.entries(POSE_BONE_SEARCH)) {
       if (!bones[key]) {
         for (const n of names) {
           if (node.name === n) {
-            bones[key] = { node, restQ: node.quaternion.clone() };
+            bones[key] = node;
             break;
           }
         }
       }
     }
   });
+  return bones;
+}
+
+function createProfessionalIdleClip(avatarGroup, deltas) {
+  const bones = findPoseBones(avatarGroup);
+
+  // Store references for the control panel
+  poseBones = bones;
+  poseRestQuaternions = {};
+  for (const [key, bone] of Object.entries(bones)) {
+    poseRestQuaternions[key] = bone.quaternion.clone();
+  }
 
   const foundBones = Object.keys(bones);
   if (foundBones.length === 0) {
@@ -473,23 +499,22 @@ function createProfessionalIdleClip(avatarGroup) {
   }
   console.log("Professional idle pose: found bones:", foundBones);
 
+  const poseDeltas = deltas || DEFAULT_POSE_DELTAS;
   const tracks = [];
   const duration = 6.0;
-  // Static pose with very subtle breathing sway (3 keyframes for seamless loop)
   const times = [0, 3.0, 6.0];
 
-  function addBoneTrack(key, deltaX, deltaY, deltaZ, breathX) {
-    const entry = bones[key];
-    if (!entry) return;
+  function addBoneTrack(key, breathX) {
+    const bone = bones[key];
+    const d = poseDeltas[key];
+    if (!bone || !d) return;
 
-    const restQ = entry.restQ;
-    // Apply delta rotation on top of rest pose (in bone's local frame)
+    const restQ = poseRestQuaternions[key];
     const delta = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(deltaX, deltaY, deltaZ)
+      new THREE.Euler(d.x, d.y, d.z)
     );
     const poseQ = restQ.clone().multiply(delta);
 
-    // Subtle breathing variation
     const breathDelta = new THREE.Quaternion().setFromEuler(
       new THREE.Euler(breathX || 0, 0, 0)
     );
@@ -497,7 +522,7 @@ function createProfessionalIdleClip(avatarGroup) {
 
     tracks.push(
       new THREE.QuaternionKeyframeTrack(
-        `${entry.node.name}.quaternion`,
+        `${bone.name}.quaternion`,
         times,
         [
           poseQ.x, poseQ.y, poseQ.z, poseQ.w,
@@ -508,18 +533,12 @@ function createProfessionalIdleClip(avatarGroup) {
     );
   }
 
-  // Professional clasped-hands-in-front pose (deltas from T-pose rest)
-  // Left arm: bring down ~66deg and slightly forward ~20deg
-  addBoneTrack("leftUpperArm", 0.35, 0.15, 1.15, 0.005);
-  // Right arm: mirror of left
-  addBoneTrack("rightUpperArm", 0.35, -0.15, -1.15, 0.005);
-  // Left forearm: bend inward ~80deg to bring hand toward center
-  addBoneTrack("leftForeArm", -0.2, 1.4, 0.1, 0);
-  // Right forearm: mirror
-  addBoneTrack("rightForeArm", -0.2, -1.4, 0.1, 0);
-  // Hands: slight rotation for natural clasped look
-  addBoneTrack("leftHand", 0.1, 0.2, -0.1, 0);
-  addBoneTrack("rightHand", 0.1, -0.2, 0.1, 0);
+  addBoneTrack("leftUpperArm", 0.005);
+  addBoneTrack("rightUpperArm", 0.005);
+  addBoneTrack("leftForeArm", 0);
+  addBoneTrack("rightForeArm", 0);
+  addBoneTrack("leftHand", 0);
+  addBoneTrack("rightHand", 0);
 
   if (tracks.length > 0) {
     const clip = new THREE.AnimationClip("Idle", duration, tracks);
@@ -528,6 +547,33 @@ function createProfessionalIdleClip(avatarGroup) {
   }
 
   return null;
+}
+
+// Apply pose deltas directly to bones (used by the live control panel)
+function applyPoseDeltas(deltas) {
+  for (const [key, bone] of Object.entries(poseBones)) {
+    const d = deltas[key];
+    const restQ = poseRestQuaternions[key];
+    if (!bone || !d || !restQ) continue;
+    const delta = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(d.x, d.y, d.z)
+    );
+    bone.quaternion.copy(restQ.clone().multiply(delta));
+  }
+}
+
+// Rebuild the Idle animation clip with new deltas and restart it
+function rebuildIdleWithDeltas(deltas) {
+  if (!mixer || !avatarGroup) return;
+  if (actions["Idle"]) {
+    actions["Idle"].stop();
+  }
+  const clip = createProfessionalIdleClip(avatarGroup, deltas);
+  if (clip) {
+    actions["Idle"] = mixer.clipAction(clip);
+    actions["Idle"].reset().fadeIn(0).play();
+    currentAnimation = "Idle";
+  }
 }
 
 function loadAvatar(targetScene) {
@@ -708,4 +754,11 @@ function updateAvatar(delta) {
   updateFrame();
 }
 
-export { loadAvatar, updateAvatar };
+export {
+  loadAvatar,
+  updateAvatar,
+  applyPoseDeltas,
+  rebuildIdleWithDeltas,
+  DEFAULT_POSE_DELTAS,
+  POSE_BONE_SEARCH,
+};

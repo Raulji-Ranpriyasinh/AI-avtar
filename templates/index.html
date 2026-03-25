@@ -56,6 +56,22 @@
 
     <div id="canvas-container"></div>
 
+    <!-- Pose Control Panel -->
+    <div id="pose-panel">
+      <div id="pose-panel-header">
+        <span>Pose Controls</span>
+        <button id="pose-panel-toggle">&#9660;</button>
+      </div>
+      <div id="pose-panel-body">
+        <div id="pose-sliders"></div>
+        <div id="pose-panel-actions">
+          <button id="pose-copy-btn">Copy Values</button>
+          <button id="pose-reset-btn">Reset</button>
+        </div>
+        <textarea id="pose-output" readonly placeholder="Click 'Copy Values' to get coordinates..."></textarea>
+      </div>
+    </div>
+
     <script type="module" src="/static/js/app.js"></script>
   </body>
 </html>
