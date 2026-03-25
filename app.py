@@ -207,6 +207,11 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/reynaindex")
+def reynaindex():
+    return render_template("reynaindex.html")
+
+
 @app.route("/voices", methods=["GET"])
 def get_voices():
     loop = asyncio.new_event_loop()
