@@ -156,7 +156,9 @@ function setAnimation(name) {
     if (prevAction) {
       prevAction.fadeOut(0.5);
     }
+    const prev = currentAnimation;
     currentAnimation = name;
+    addDebugLog("anim", `${prev} -> ${name}`);
   }
 }
 
@@ -227,7 +229,11 @@ function onSpeechUpdate() {
   const chosenAnim = isTalkingHint ? pickTalkingAnimation(hint) : (actions[hint] ? hint : pickTalkingAnimation(hint));
   setAnimation(chosenAnim);
 
+  const prevExpr = currentFacialExpression;
   currentFacialExpression = message.facialExpression || "default";
+  if (prevExpr !== currentFacialExpression) {
+    addDebugLog("expr", `${prevExpr || "default"} -> ${currentFacialExpression}`);
+  }
   currentLipsync = message.lipsync || null;
 
   if (message.audio) {
@@ -258,8 +264,11 @@ function updateFrame() {
   lerpMorphTarget("eyeBlinkRight", blink ? 1 : 0, 0.5);
 
   const appliedMorphTargets = [];
+  debugActiveViseme = null;
+  debugAudioTime = null;
   if (currentAudio && currentLipsync) {
     const currentAudioTime = currentAudio.currentTime;
+    debugAudioTime = currentAudioTime;
     for (let i = 0; i < currentLipsync.mouthCues.length; i++) {
       const mouthCue = currentLipsync.mouthCues[i];
       if (currentAudioTime >= mouthCue.start && currentAudioTime <= mouthCue.end) {
@@ -267,6 +276,7 @@ function updateFrame() {
         if (viseme) {
           appliedMorphTargets.push(viseme);
           lerpMorphTarget(viseme, 1, 0.2);
+          debugActiveViseme = `${mouthCue.value} -> ${viseme}`;
         }
         break;
       }
@@ -495,18 +505,18 @@ function loadAvatar(targetScene) {
               return;
             }
 
-            // Additional check: verify skeleton transforms are compatible
-            // Compares bone scale and position magnitude to detect rig mismatches
-            // (e.g. Daz rigs use cm scale 0.01 vs Mixamo rigs at scale 1.0)
+            // Check skeleton transform compatibility (scale, position, and orientation)
+            // to decide whether animation retargeting is needed.
             let transformsCompatible = true;
             const animRoot = animGltf.scene;
             animRoot.updateMatrixWorld(true);
+
+            // Check scale and position on core bones
             const checkBones = ["Hips", "Spine", "Head"];
             for (const boneName of checkBones) {
               const avatarBone = avatarGroup.getObjectByName(boneName);
               const animBone = animRoot.getObjectByName(boneName);
               if (avatarBone && animBone) {
-                // Check scale compatibility
                 const sRatio = avatarBone.scale.x / (animBone.scale.x || 1);
                 if (sRatio > 5 || sRatio < 0.2) {
                   transformsCompatible = false;
@@ -515,7 +525,6 @@ function loadAvatar(targetScene) {
                   );
                   break;
                 }
-                // Check position magnitude compatibility
                 const avatarPosMag = avatarBone.position.length();
                 const animPosMag = animBone.position.length();
                 if (avatarPosMag > 0.01 && animPosMag > 0.01) {
@@ -531,17 +540,46 @@ function loadAvatar(targetScene) {
               }
             }
 
-            if (!transformsCompatible) {
-              // Retarget animations to match the avatar's skeleton
-              console.log("Retargeting animations to match avatar skeleton...");
-              retargetAnimations(animGltf, avatarGroup);
-
-              // Rebuild validNodes after retargeting (track names may have changed)
-              validNodes.clear();
-              avatarGroup.traverse((node) => {
-                if (node.name) validNodes.add(node.name);
-              });
+            // Also check bone orientation on arm bones — different rigs often have
+            // matching scale/position but different rest-pose rotations, which causes
+            // the avatar to stand with arms spread out instead of naturally.
+            if (transformsCompatible) {
+              const orientCheckBones = [
+                "LeftArm", "RightArm", "LeftForeArm", "RightForeArm",
+                "LeftShoulder", "RightShoulder"
+              ];
+              for (const boneName of orientCheckBones) {
+                const avatarBone = avatarGroup.getObjectByName(boneName);
+                const animBone = animRoot.getObjectByName(boneName);
+                if (avatarBone && animBone) {
+                  // Compare rest-pose quaternions using angular distance
+                  const dot = Math.abs(avatarBone.quaternion.dot(animBone.quaternion));
+                  // dot < 0.995 means > ~5.7 degrees difference
+                  if (dot < 0.995) {
+                    transformsCompatible = false;
+                    console.warn(
+                      `Bone "${boneName}" orientation mismatch (dot=${dot.toFixed(4)}). Retargeting needed.`
+                    );
+                    break;
+                  }
+                }
+              }
             }
+
+            // Always retarget to be safe — retargeting is identity when skeletons
+            // are already compatible, so it never hurts.
+            console.log(
+              transformsCompatible
+                ? "Skeletons appear compatible, applying retargeting as safety measure..."
+                : "Skeleton mismatch detected, retargeting animations..."
+            );
+            retargetAnimations(animGltf, avatarGroup);
+
+            // Rebuild validNodes after retargeting (track names may have changed)
+            validNodes.clear();
+            avatarGroup.traverse((node) => {
+              if (node.name) validNodes.add(node.name);
+            });
 
             // Filter out tracks targeting bones not in the avatar
             mixer = new THREE.AnimationMixer(avatarGroup);
@@ -589,4 +627,26 @@ function updateAvatar(delta) {
   updateFrame();
 }
 
-export { loadAvatar, updateAvatar };
+let debugActiveViseme = null;
+let debugAudioTime = null;
+const debugLogs = [];
+const MAX_DEBUG_LOGS = 50;
+
+function addDebugLog(type, message) {
+  const ts = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  debugLogs.unshift({ type, message, ts });
+  if (debugLogs.length > MAX_DEBUG_LOGS) debugLogs.pop();
+}
+
+function getDebugState() {
+  return {
+    currentAnimation,
+    currentFacialExpression: currentFacialExpression || "default",
+    activeViseme: debugActiveViseme,
+    audioTime: debugAudioTime,
+    availableAnimations: Object.keys(actions),
+    logs: debugLogs,
+  };
+}
+
+export { loadAvatar, updateAvatar, getDebugState };

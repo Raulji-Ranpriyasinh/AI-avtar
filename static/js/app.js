@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { loadAvatar, updateAvatar } from "./avatar.js";
+import { loadAvatar, updateAvatar, getDebugState } from "./avatar.js";
 import {
   subscribe,
   getState,
+  getMessageCount,
   tts,
   startRecording,
   stopRecording,
@@ -93,6 +94,7 @@ function init() {
 
   initMicrophone();
   initChatUI();
+  initDebugPanel();
 }
 
 function hideLoader() {
@@ -107,12 +109,20 @@ function onWindowResize() {
   renderer.setSize(container.clientWidth, container.clientHeight);
 }
 
+let debugFrameCount = 0;
+
 function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
   controls.update();
   updateAvatar(delta);
   renderer.render(scene, camera);
+
+  // Update debug panel every 6 frames (~10 Hz at 60fps) to avoid perf overhead
+  debugFrameCount++;
+  if (debugFrameCount % 6 === 0) {
+    updateDebugPanel();
+  }
 }
 
 function initChatUI() {
@@ -169,6 +179,70 @@ function initChatUI() {
       sendBtn.classList.remove("disabled");
     }
   });
+}
+
+function initDebugPanel() {
+  const panel = document.getElementById("debug-panel");
+  const toggle = document.getElementById("debug-toggle");
+  if (!panel || !toggle) return;
+
+  toggle.addEventListener("click", () => {
+    panel.classList.toggle("collapsed");
+    toggle.textContent = panel.classList.contains("collapsed") ? "+" : "_";
+  });
+}
+
+function updateDebugPanel() {
+  const avatarDebug = getDebugState();
+  const speechState = getState();
+  const queueLen = getMessageCount();
+
+  const elAnim = document.getElementById("debug-animation");
+  const elExpr = document.getElementById("debug-expression");
+  const elViseme = document.getElementById("debug-viseme");
+  const elAudioTime = document.getElementById("debug-audio-time");
+  const elQueue = document.getElementById("debug-queue");
+  const elSpeechState = document.getElementById("debug-speech-state");
+  const elText = document.getElementById("debug-text");
+  const elLog = document.getElementById("debug-log");
+
+  if (!elAnim) return;
+
+  elAnim.textContent = avatarDebug.currentAnimation || "--";
+  elExpr.textContent = avatarDebug.currentFacialExpression || "--";
+  elViseme.textContent = avatarDebug.activeViseme || "(none)";
+  elAudioTime.textContent =
+    avatarDebug.audioTime != null
+      ? avatarDebug.audioTime.toFixed(3) + "s"
+      : "--";
+  elQueue.textContent = `${queueLen} message(s)`;
+
+  let stateLabel = "idle";
+  if (speechState.loading) stateLabel = "loading";
+  else if (speechState.recording) stateLabel = "recording";
+  else if (speechState.currentMessage) stateLabel = "speaking";
+  elSpeechState.textContent = stateLabel;
+
+  elText.textContent = speechState.currentMessage
+    ? speechState.currentMessage.text
+    : "--";
+
+  // Render log entries
+  const logHtml = avatarDebug.logs
+    .slice(0, 30)
+    .map((entry) => {
+      const cls =
+        entry.type === "anim"
+          ? "log-anim"
+          : entry.type === "expr"
+          ? "log-expr"
+          : entry.type === "viseme"
+          ? "log-viseme"
+          : "log-state";
+      return `<div class="log-entry"><span class="${cls}">[${entry.ts}] ${entry.type}: ${entry.message}</span></div>`;
+    })
+    .join("");
+  elLog.innerHTML = logHtml;
 }
 
 window.addEventListener("DOMContentLoaded", init);
