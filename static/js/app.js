@@ -1,7 +1,13 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { loadAvatar, updateAvatar, getAvatarGroup } from "./avatar.js";
-import { initPoseControls } from "./poseControls.js";
+import {
+  loadAvatar,
+  updateAvatar,
+  applyPoseDeltas,
+  rebuildIdleWithDeltas,
+  DEFAULT_POSE_DELTAS,
+  POSE_BONE_SEARCH,
+} from "./avatar.js";
 import {
   subscribe,
   getState,
@@ -86,12 +92,6 @@ function init() {
       }
       hideLoader();
       animate();
-
-      // Initialize pose controls after avatar is loaded
-      const group = getAvatarGroup();
-      if (group) {
-        initPoseControls(group);
-      }
     })
     .catch((err) => {
       console.error("Failed to load avatar:", err);
@@ -100,6 +100,7 @@ function init() {
 
   initMicrophone();
   initChatUI();
+  initPosePanel();
 }
 
 function hideLoader() {
@@ -175,6 +176,127 @@ function initChatUI() {
       sendBtn.disabled = false;
       sendBtn.classList.remove("disabled");
     }
+  });
+}
+
+// ---- Pose Control Panel ----
+
+function initPosePanel() {
+  const header = document.getElementById("pose-panel-header");
+  const body = document.getElementById("pose-panel-body");
+  const toggle = document.getElementById("pose-panel-toggle");
+  const copyBtn = document.getElementById("pose-copy-btn");
+  const resetBtn = document.getElementById("pose-reset-btn");
+  const output = document.getElementById("pose-output");
+  const slidersContainer = document.getElementById("pose-sliders");
+
+  if (!header || !body) return;
+
+  // Toggle collapse
+  header.addEventListener("click", () => {
+    body.classList.toggle("collapsed");
+    toggle.innerHTML = body.classList.contains("collapsed") ? "&#9654;" : "&#9660;";
+  });
+
+  // Current delta values (cloned from defaults)
+  const currentDeltas = {};
+  for (const [key, val] of Object.entries(DEFAULT_POSE_DELTAS)) {
+    currentDeltas[key] = { x: val.x, y: val.y, z: val.z };
+  }
+
+  // Friendly labels for bone keys
+  const boneLabels = {
+    leftShoulder: "Left Shoulder",
+    rightShoulder: "Right Shoulder",
+    leftUpperArm: "Left Upper Arm",
+    rightUpperArm: "Right Upper Arm",
+    leftElbow: "Left Elbow / Forearm",
+    rightElbow: "Right Elbow / Forearm",
+    leftHand: "Left Hand",
+    rightHand: "Right Hand",
+  };
+
+  const axes = ["x", "y", "z"];
+  const sliderRefs = {}; // key -> { x: {slider, valSpan}, y: ..., z: ... }
+
+  // Build slider UI for each bone
+  for (const key of Object.keys(DEFAULT_POSE_DELTAS)) {
+    const group = document.createElement("div");
+    group.className = "pose-bone-group";
+
+    const label = document.createElement("div");
+    label.className = "pose-bone-label";
+    label.textContent = boneLabels[key] || key;
+    group.appendChild(label);
+
+    sliderRefs[key] = {};
+
+    for (const axis of axes) {
+      const row = document.createElement("div");
+      row.className = "pose-slider-row";
+
+      const axisLabel = document.createElement("label");
+      axisLabel.textContent = axis.toUpperCase();
+      row.appendChild(axisLabel);
+
+      const slider = document.createElement("input");
+      slider.type = "range";
+      slider.min = "-3.14";
+      slider.max = "3.14";
+      slider.step = "0.01";
+      slider.value = currentDeltas[key][axis];
+      row.appendChild(slider);
+
+      const valSpan = document.createElement("span");
+      valSpan.className = "pose-val";
+      valSpan.textContent = Number(currentDeltas[key][axis]).toFixed(2);
+      row.appendChild(valSpan);
+
+      sliderRefs[key][axis] = { slider, valSpan };
+
+      slider.addEventListener("input", () => {
+        const v = parseFloat(slider.value);
+        currentDeltas[key][axis] = v;
+        valSpan.textContent = v.toFixed(2);
+        applyPoseDeltas(currentDeltas);
+      });
+
+      // On mouse up, rebuild the idle clip so it persists
+      slider.addEventListener("change", () => {
+        rebuildIdleWithDeltas(currentDeltas);
+      });
+
+      group.appendChild(row);
+    }
+
+    slidersContainer.appendChild(group);
+  }
+
+  // Copy values button
+  copyBtn.addEventListener("click", () => {
+    const lines = [];
+    for (const [key, d] of Object.entries(currentDeltas)) {
+      lines.push(`${key}: { x: ${d.x.toFixed(2)}, y: ${d.y.toFixed(2)}, z: ${d.z.toFixed(2)} }`);
+    }
+    const text = lines.join("\n");
+    output.value = text;
+    navigator.clipboard.writeText(text).catch(() => {});
+    copyBtn.textContent = "Copied!";
+    setTimeout(() => { copyBtn.textContent = "Copy Values"; }, 1500);
+  });
+
+  // Reset button
+  resetBtn.addEventListener("click", () => {
+    for (const [key, val] of Object.entries(DEFAULT_POSE_DELTAS)) {
+      currentDeltas[key] = { x: val.x, y: val.y, z: val.z };
+      for (const axis of axes) {
+        const ref = sliderRefs[key][axis];
+        ref.slider.value = val[axis];
+        ref.valSpan.textContent = val[axis].toFixed(2);
+      }
+    }
+    rebuildIdleWithDeltas(currentDeltas);
+    output.value = "";
   });
 }
 

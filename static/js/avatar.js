@@ -18,6 +18,10 @@ let blinkTimeout = null;
 let avatarScene = null;
 let morphNameMap = {};
 
+// Pose editor state — stores references to arm/hand bones for the control panel
+let poseBones = {};
+let poseRestQuaternions = {};
+
 function buildMorphNameMap() {
   if (!avatarScene) return;
 
@@ -175,7 +179,17 @@ function startBlinking() {
 
 // Animation groups for intelligent cycling
 const TALKING_ANIMS = ["TalkingOne", "TalkingTwo", "TalkingThree"];
-const IDLE_ANIMS = ["Idle", "HappyIdle"];
+const IDLE_ANIMS = ["Idle"];
+
+// Only load professional animations suitable for a company website
+const PROFESSIONAL_ANIMS = new Set([
+  "Idle",
+  "TalkingOne",
+  "TalkingTwo",
+  "TalkingThree",
+  "DismissingGesture",
+  "ThoughtfulHeadShake",
+]);
 
 function pickTalkingAnimation(hint) {
   // Build list of available talking animations from loaded actions
@@ -203,9 +217,7 @@ function pickTalkingAnimation(hint) {
 }
 
 function pickIdleAnimation() {
-  const available = IDLE_ANIMS.filter((name) => actions[name]);
-  if (available.length === 0) return "Idle";
-  return available[Math.floor(Math.random() * available.length)];
+  return "Idle";
 }
 
 function onSpeechUpdate() {
@@ -433,6 +445,146 @@ function retargetAnimations(animGltf, avatarGroup) {
   );
 }
 
+// Bone search patterns shared by pose creation and control panel
+const POSE_BONE_SEARCH = {
+  leftShoulder: ["LeftShoulder", "lCollar", "mixamorig:LeftShoulder"],
+  rightShoulder: ["RightShoulder", "rCollar", "mixamorig:RightShoulder"],
+  leftUpperArm: ["LeftArm", "lShldrBend", "mixamorig:LeftArm"],
+  rightUpperArm: ["RightArm", "rShldrBend", "mixamorig:RightArm"],
+  leftElbow: ["LeftForeArm", "lForearmBend", "mixamorig:LeftForeArm"],
+  rightElbow: ["RightForeArm", "rForearmBend", "mixamorig:RightForeArm"],
+  leftHand: ["LeftHand", "lHand", "mixamorig:LeftHand"],
+  rightHand: ["RightHand", "rHand", "mixamorig:RightHand"],
+};
+
+// Default professional pose delta values (radians)
+const DEFAULT_POSE_DELTAS = {
+  leftShoulder:  { x: -0.05, y: -0.45, z:  0.00 },
+  rightShoulder: { x:  0.00, y: -0.34, z: -0.16 },
+  leftUpperArm:  { x:  0.35, y:  1.83, z:  1.15 },
+  rightUpperArm: { x:  0.44, y: -1.31, z: -0.96 },
+  leftElbow:     { x: -0.60, y: -1.57, z: -0.80 },
+  rightElbow:    { x:  0.06, y:  1.18, z: -0.80 },
+  leftHand:      { x:  0.20, y: -0.30, z: -0.10 },
+  rightHand:     { x:  0.20, y:  0.34, z:  0.10 },
+};
+
+function findPoseBones(group) {
+  const bones = {};
+  group.traverse((node) => {
+    for (const [key, names] of Object.entries(POSE_BONE_SEARCH)) {
+      if (!bones[key]) {
+        for (const n of names) {
+          if (node.name === n) {
+            bones[key] = node;
+            break;
+          }
+        }
+      }
+    }
+  });
+  return bones;
+}
+
+function createProfessionalIdleClip(avatarGroup, deltas) {
+  const bones = findPoseBones(avatarGroup);
+
+  // Store bone references for the control panel.
+  // Only capture rest quaternions on the FIRST call (before any pose is applied)
+  // to prevent drift when rebuildIdleWithDeltas re-invokes this function.
+  poseBones = bones;
+  if (Object.keys(poseRestQuaternions).length === 0) {
+    for (const [key, bone] of Object.entries(bones)) {
+      poseRestQuaternions[key] = bone.quaternion.clone();
+    }
+  }
+
+  const foundBones = Object.keys(bones);
+  if (foundBones.length === 0) {
+    console.warn("Professional idle pose: no arm bones found, skipping");
+    return null;
+  }
+  console.log("Professional idle pose: found bones:", foundBones);
+
+  const poseDeltas = deltas || DEFAULT_POSE_DELTAS;
+  const tracks = [];
+  const duration = 6.0;
+  const times = [0, 3.0, 6.0];
+
+  function addBoneTrack(key, breathX) {
+    const bone = bones[key];
+    const d = poseDeltas[key];
+    if (!bone || !d) return;
+
+    const restQ = poseRestQuaternions[key];
+    const delta = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(d.x, d.y, d.z)
+    );
+    const poseQ = restQ.clone().multiply(delta);
+
+    const breathDelta = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(breathX || 0, 0, 0)
+    );
+    const breathQ = poseQ.clone().multiply(breathDelta);
+
+    tracks.push(
+      new THREE.QuaternionKeyframeTrack(
+        `${bone.name}.quaternion`,
+        times,
+        [
+          poseQ.x, poseQ.y, poseQ.z, poseQ.w,
+          breathQ.x, breathQ.y, breathQ.z, breathQ.w,
+          poseQ.x, poseQ.y, poseQ.z, poseQ.w,
+        ]
+      )
+    );
+  }
+
+  addBoneTrack("leftShoulder", 0);
+  addBoneTrack("rightShoulder", 0);
+  addBoneTrack("leftUpperArm", 0.005);
+  addBoneTrack("rightUpperArm", 0.005);
+  addBoneTrack("leftElbow", 0);
+  addBoneTrack("rightElbow", 0);
+  addBoneTrack("leftHand", 0);
+  addBoneTrack("rightHand", 0);
+
+  if (tracks.length > 0) {
+    const clip = new THREE.AnimationClip("Idle", duration, tracks);
+    console.log("Professional idle pose animation created with", tracks.length, "bone tracks");
+    return clip;
+  }
+
+  return null;
+}
+
+// Apply pose deltas directly to bones (used by the live control panel)
+function applyPoseDeltas(deltas) {
+  for (const [key, bone] of Object.entries(poseBones)) {
+    const d = deltas[key];
+    const restQ = poseRestQuaternions[key];
+    if (!bone || !d || !restQ) continue;
+    const delta = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(d.x, d.y, d.z)
+    );
+    bone.quaternion.copy(restQ.clone().multiply(delta));
+  }
+}
+
+// Rebuild the Idle animation clip with new deltas and restart it
+function rebuildIdleWithDeltas(deltas) {
+  if (!mixer || !avatarGroup) return;
+  if (actions["Idle"]) {
+    actions["Idle"].stop();
+  }
+  const clip = createProfessionalIdleClip(avatarGroup, deltas);
+  if (clip) {
+    actions["Idle"] = mixer.clipAction(clip);
+    actions["Idle"].reset().fadeIn(0).play();
+    currentAnimation = "Idle";
+  }
+}
+
 function loadAvatar(targetScene) {
   scene = targetScene;
   const loader = new GLTFLoader();
@@ -552,9 +704,23 @@ function loadAvatar(targetScene) {
               });
             });
 
+            // Filter to only professional animations
+            animGltf.animations = animGltf.animations.filter(
+              (clip) => PROFESSIONAL_ANIMS.has(clip.name)
+            );
+
             animGltf.animations.forEach((clip) => {
               actions[clip.name] = mixer.clipAction(clip);
             });
+
+            // Create professional standing pose (hands clasped in front)
+            const professionalClip = createProfessionalIdleClip(avatarGroup);
+            if (professionalClip) {
+              if (actions["Idle"]) {
+                actions["Idle"].stop();
+              }
+              actions["Idle"] = mixer.clipAction(professionalClip);
+            }
 
             if (actions["Idle"]) {
               actions["Idle"].reset().fadeIn(0).play();
@@ -572,6 +738,14 @@ function loadAvatar(targetScene) {
           undefined,
           (animError) => {
             console.warn("animations.glb not found, continuing without body animations:", animError);
+            // Still apply professional pose even without animations.glb
+            mixer = new THREE.AnimationMixer(avatarGroup);
+            const fallbackClip = createProfessionalIdleClip(avatarGroup);
+            if (fallbackClip) {
+              actions["Idle"] = mixer.clipAction(fallbackClip);
+              actions["Idle"].reset().fadeIn(0).play();
+              currentAnimation = "Idle";
+            }
             startBlinking();
             subscribe(onSpeechUpdate);
             resolve(avatarBounds);
@@ -593,4 +767,12 @@ function getAvatarGroup() {
   return avatarGroup;
 }
 
-export { loadAvatar, updateAvatar, getAvatarGroup };
+export {
+  loadAvatar,
+  updateAvatar,
+  getAvatarGroup,
+  applyPoseDeltas,
+  rebuildIdleWithDeltas,
+  DEFAULT_POSE_DELTAS,
+  POSE_BONE_SEARCH,
+};
