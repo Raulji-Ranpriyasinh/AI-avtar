@@ -206,10 +206,12 @@ function initPosePanel() {
 
   // Friendly labels for bone keys
   const boneLabels = {
+    leftShoulder: "Left Shoulder",
+    rightShoulder: "Right Shoulder",
     leftUpperArm: "Left Upper Arm",
     rightUpperArm: "Right Upper Arm",
-    leftForeArm: "Left Forearm",
-    rightForeArm: "Right Forearm",
+    leftElbow: "Left Elbow / Forearm",
+    rightElbow: "Right Elbow / Forearm",
     leftHand: "Left Hand",
     rightHand: "Right Hand",
   };

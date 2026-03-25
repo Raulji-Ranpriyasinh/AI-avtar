@@ -447,20 +447,24 @@ function retargetAnimations(animGltf, avatarGroup) {
 
 // Bone search patterns shared by pose creation and control panel
 const POSE_BONE_SEARCH = {
+  leftShoulder: ["LeftShoulder", "lCollar", "mixamorig:LeftShoulder"],
+  rightShoulder: ["RightShoulder", "rCollar", "mixamorig:RightShoulder"],
   leftUpperArm: ["LeftArm", "lShldrBend", "mixamorig:LeftArm"],
   rightUpperArm: ["RightArm", "rShldrBend", "mixamorig:RightArm"],
-  leftForeArm: ["LeftForeArm", "lForearmBend", "mixamorig:LeftForeArm"],
-  rightForeArm: ["RightForeArm", "rForearmBend", "mixamorig:RightForeArm"],
+  leftElbow: ["LeftForeArm", "lForearmBend", "mixamorig:LeftForeArm"],
+  rightElbow: ["RightForeArm", "rForearmBend", "mixamorig:RightForeArm"],
   leftHand: ["LeftHand", "lHand", "mixamorig:LeftHand"],
   rightHand: ["RightHand", "rHand", "mixamorig:RightHand"],
 };
 
 // Default professional pose delta values (radians)
 const DEFAULT_POSE_DELTAS = {
+  leftShoulder:  { x: 0, y: 0, z: 0 },
+  rightShoulder: { x: 0, y: 0, z: 0 },
   leftUpperArm:  { x: 0.35, y: 0.15, z: 1.15 },
   rightUpperArm: { x: 0.35, y: -0.15, z: -1.15 },
-  leftForeArm:   { x: -0.2, y: 1.4, z: 0.1 },
-  rightForeArm:  { x: -0.2, y: -1.4, z: 0.1 },
+  leftElbow:     { x: -0.2, y: 1.4, z: 0.1 },
+  rightElbow:    { x: -0.2, y: -1.4, z: 0.1 },
   leftHand:      { x: 0.1, y: 0.2, z: -0.1 },
   rightHand:     { x: 0.1, y: -0.2, z: 0.1 },
 };
@@ -536,10 +540,12 @@ function createProfessionalIdleClip(avatarGroup, deltas) {
     );
   }
 
+  addBoneTrack("leftShoulder", 0);
+  addBoneTrack("rightShoulder", 0);
   addBoneTrack("leftUpperArm", 0.005);
   addBoneTrack("rightUpperArm", 0.005);
-  addBoneTrack("leftForeArm", 0);
-  addBoneTrack("rightForeArm", 0);
+  addBoneTrack("leftElbow", 0);
+  addBoneTrack("rightElbow", 0);
   addBoneTrack("leftHand", 0);
   addBoneTrack("rightHand", 0);
 
