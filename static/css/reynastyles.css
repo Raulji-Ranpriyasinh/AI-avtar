@@ -2182,6 +2182,79 @@ a {
   50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
 }
 
+/* Text input row */
+.ai-avatar-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.ai-avatar-text-input {
+  flex: 1;
+  height: 36px;
+  padding: 0 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  color: #374151;
+  font-size: 13px;
+  font-family: "Poppins", sans-serif;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.ai-avatar-text-input::placeholder {
+  color: #9ca3af;
+}
+
+.ai-avatar-text-input:focus {
+  border-color: #6366f1;
+}
+
+.ai-avatar-send-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: #6366f1;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.ai-avatar-send-btn:hover {
+  background: #4f46e5;
+}
+
+/* CC caption overlay */
+.ai-avatar-cc {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 90%;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 13px;
+  font-family: "Poppins", sans-serif;
+  border-radius: 8px;
+  text-align: center;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* CC button active state */
+.ai-avatar-ctrl-btn.active {
+  border-color: #6366f1;
+  background: #6366f1;
+  color: #fff;
+}
+
 /* Pill buttons (About Us, Testimonials) */
 .ai-avatar-pill-btn {
   flex: 1;

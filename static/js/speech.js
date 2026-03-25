@@ -125,6 +125,13 @@ function stopRecording() {
   }
 }
 
+function stopSpeech() {
+  messages = [];
+  currentMessage = null;
+  loading = false;
+  notify();
+}
+
 export {
   subscribe,
   getState,
@@ -132,5 +139,6 @@ export {
   tts,
   startRecording,
   stopRecording,
+  stopSpeech,
   initMicrophone,
 };

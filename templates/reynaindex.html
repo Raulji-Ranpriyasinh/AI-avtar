@@ -546,6 +546,9 @@
   <div id="ai-avatar-wrapper" class="ai-avatar-wrapper">
     <div id="ai-avatar-canvas-container" class="ai-avatar-canvas-container"></div>
 
+    <!-- CC caption overlay above the avatar -->
+    <div id="ai-avatar-cc" class="ai-avatar-cc" style="display:none;"></div>
+
     <!-- Control widget floating near the avatar -->
     <div class="ai-avatar-controls">
       <button id="ai-avatar-close" class="ai-avatar-ctrl-close" aria-label="Close avatar">&times;</button>
@@ -558,6 +561,14 @@
         </button>
         <button id="ai-avatar-cc-btn" class="ai-avatar-ctrl-btn" aria-label="Closed captions" title="CC">
           <span style="font-weight:700;font-size:14px;">CC</span>
+        </button>
+      </div>
+
+      <!-- Text input row -->
+      <div class="ai-avatar-input-row">
+        <input id="ai-avatar-text-input" class="ai-avatar-text-input" type="text" placeholder="Type a message..." autocomplete="off" />
+        <button id="ai-avatar-send-btn" class="ai-avatar-send-btn" aria-label="Send" title="Send">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
         </button>
       </div>
 
@@ -581,17 +592,23 @@
     import * as THREE from "three";
     import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     import { loadAvatar, updateAvatar } from "/static/js/avatar.js";
-    import { tts, subscribe, getState, startRecording, stopRecording, initMicrophone } from "/static/js/speech.js";
+    import { tts, subscribe, getState, startRecording, stopRecording, stopSpeech, initMicrophone } from "/static/js/speech.js";
 
     const avatarBtn = document.getElementById("ai-avatar-btn");
     const avatarWrapper = document.getElementById("ai-avatar-wrapper");
     const closeBtn = document.getElementById("ai-avatar-close");
     const container = document.getElementById("ai-avatar-canvas-container");
     const micBtn = document.getElementById("ai-avatar-mic-btn");
+    const ccBtn = document.getElementById("ai-avatar-cc-btn");
+    const ccDisplay = document.getElementById("ai-avatar-cc");
+    const textInput = document.getElementById("ai-avatar-text-input");
+    const sendBtn = document.getElementById("ai-avatar-send-btn");
     const stopBtn = document.getElementById("ai-avatar-stop-btn");
     const aboutBtn = document.getElementById("ai-avatar-about-btn");
     const testimonialsBtn = document.getElementById("ai-avatar-testimonials-btn");
     const progressBar = document.getElementById("ai-avatar-progress");
+
+    let ccEnabled = false;
 
     let initialized = false;
     let renderer, scene, camera, controls, clock;
@@ -708,27 +725,51 @@
       avatarBtn.classList.remove("hidden");
     });
 
-    // Hold-to-speak mic button
-    micBtn.addEventListener("mousedown", () => {
+    // Hold-to-speak mic button (mouse + touch)
+    function startMic() {
       if (!isRecording) {
         startRecording();
         isRecording = true;
         micBtn.classList.add("recording");
       }
-    });
-    micBtn.addEventListener("mouseup", () => {
+    }
+    function endMic() {
       if (isRecording) {
         stopRecording();
         isRecording = false;
         micBtn.classList.remove("recording");
       }
-    });
-    micBtn.addEventListener("mouseleave", () => {
-      if (isRecording) {
-        stopRecording();
-        isRecording = false;
-        micBtn.classList.remove("recording");
+    }
+    micBtn.addEventListener("mousedown", startMic);
+    micBtn.addEventListener("mouseup", endMic);
+    micBtn.addEventListener("mouseleave", endMic);
+    micBtn.addEventListener("touchstart", (e) => { e.preventDefault(); startMic(); });
+    micBtn.addEventListener("touchend", (e) => { e.preventDefault(); endMic(); });
+    micBtn.addEventListener("touchcancel", endMic);
+
+    // Text input send
+    sendBtn.addEventListener("click", () => {
+      const text = textInput.value.trim();
+      if (text) {
+        tts(text);
+        textInput.value = "";
       }
+    });
+    textInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const text = textInput.value.trim();
+        if (text) {
+          tts(text);
+          textInput.value = "";
+        }
+      }
+    });
+
+    // CC toggle
+    ccBtn.addEventListener("click", () => {
+      ccEnabled = !ccEnabled;
+      ccDisplay.style.display = ccEnabled ? "block" : "none";
+      ccBtn.classList.toggle("active", ccEnabled);
     });
 
     // Quick-nav buttons
@@ -741,13 +782,12 @@
       if (el) el.scrollIntoView({ behavior: "smooth" });
     });
 
-    // Stop response (sends empty to reset)
+    // Stop response — clears speech queue and stops audio
     stopBtn.addEventListener("click", () => {
-      const audioElements = document.querySelectorAll("audio");
-      audioElements.forEach(a => { a.pause(); a.currentTime = 0; });
+      stopSpeech();
     });
 
-    // Update progress bar based on speech state
+    // Update progress bar and CC based on speech state
     subscribe(() => {
       const state = getState();
       if (state.loading) {
@@ -756,9 +796,13 @@
       } else if (state.currentMessage) {
         progressBar.style.width = "70%";
         progressBar.classList.remove("loading");
+        if (ccEnabled && state.currentMessage.text) {
+          ccDisplay.textContent = state.currentMessage.text;
+        }
       } else {
         progressBar.style.width = "0%";
         progressBar.classList.remove("loading");
+        if (ccEnabled) ccDisplay.textContent = "";
       }
     });
 
