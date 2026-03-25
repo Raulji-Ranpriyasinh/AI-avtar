@@ -589,4 +589,8 @@ function updateAvatar(delta) {
   updateFrame();
 }
 
-export { loadAvatar, updateAvatar };
+function getAvatarGroup() {
+  return avatarGroup;
+}
+
+export { loadAvatar, updateAvatar, getAvatarGroup };

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { loadAvatar, updateAvatar } from "./avatar.js";
+import { loadAvatar, updateAvatar, getAvatarGroup } from "./avatar.js";
+import { initPoseControls } from "./poseControls.js";
 import {
   subscribe,
   getState,
@@ -85,6 +86,12 @@ function init() {
       }
       hideLoader();
       animate();
+
+      // Initialize pose controls after avatar is loaded
+      const group = getAvatarGroup();
+      if (group) {
+        initPoseControls(group);
+      }
     })
     .catch((err) => {
       console.error("Failed to load avatar:", err);
