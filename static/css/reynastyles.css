@@ -2026,3 +2026,192 @@ a {
     padding-inline: 20px;
   }
 }
+
+/* ── AI Avatar Floating Button & Panel ── */
+
+.ai-avatar-btn {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  z-index: 1000;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 3px solid var(--teal);
+  background: var(--gradient);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 24px rgba(55, 232, 198, 0.35);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, opacity 0.3s ease;
+  animation: ai-avatar-pulse 2.5s ease-in-out infinite;
+}
+
+.ai-avatar-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 8px 32px rgba(55, 232, 198, 0.5);
+}
+
+.ai-avatar-btn.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.6);
+}
+
+.ai-avatar-btn-icon {
+  width: 34px;
+  height: 34px;
+}
+
+@keyframes ai-avatar-pulse {
+  0%, 100% { box-shadow: 0 6px 24px rgba(55, 232, 198, 0.35); }
+  50% { box-shadow: 0 6px 32px rgba(55, 232, 198, 0.55), 0 0 0 8px rgba(55, 232, 198, 0.12); }
+}
+
+.ai-avatar-panel {
+  position: fixed;
+  bottom: 0;
+  right: 32px;
+  z-index: 999;
+  width: 380px;
+  height: 520px;
+  background: linear-gradient(180deg, #0d1117 0%, #161b22 100%);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 48px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: translateY(100%);
+  opacity: 0;
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.ai-avatar-panel.open {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ai-avatar-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.ai-avatar-panel-title {
+  color: var(--white);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: "Poppins", sans-serif;
+}
+
+.ai-avatar-close {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--white);
+  font-size: 20px;
+  line-height: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.ai-avatar-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.ai-avatar-canvas-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.ai-avatar-canvas-container canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.ai-avatar-panel-controls {
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.ai-avatar-chat-bar {
+  display: flex;
+  gap: 8px;
+}
+
+.ai-avatar-chat-bar input {
+  flex: 1;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--white);
+  font-size: 14px;
+  font-family: "Poppins", sans-serif;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.ai-avatar-chat-bar input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.ai-avatar-chat-bar input:focus {
+  border-color: var(--teal);
+}
+
+.ai-avatar-send-btn {
+  height: 40px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 10px;
+  background: var(--gradient);
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: "Poppins", sans-serif;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.ai-avatar-send-btn:hover {
+  opacity: 0.85;
+}
+
+@media (max-width: 480px) {
+  .ai-avatar-btn {
+    width: 54px;
+    height: 54px;
+    bottom: 20px;
+    right: 20px;
+  }
+
+  .ai-avatar-btn-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .ai-avatar-panel {
+    right: 0;
+    width: 100%;
+    height: 70vh;
+    border-radius: 20px 20px 0 0;
+  }
+}
