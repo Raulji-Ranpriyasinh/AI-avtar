@@ -1,7 +1,7 @@
 /**
  * Pose Controls Module
- * Provides a right-side panel with sliders for Shoulder, Elbow, Forearm, and Hand
- * bone rotations. Includes a "Copy Values" button to export current pose as JSON.
+ * Provides a right-side panel with sliders for arm bone rotations (both sides).
+ * Includes hardcoded default pose and a "Copy Values" button to export as JSON.
  */
 
 import * as THREE from "three";
@@ -9,38 +9,76 @@ import * as THREE from "three";
 let avatarGroupRef = null;
 let boneRefs = {};
 let boneRestQuaternions = {};
-let poseValues = {
-  shoulder: { x: 0, y: 0, z: 0 },
-  elbow: { x: 0, y: 0, z: 0 },
-  forearm: { x: 0, y: 0, z: 0 },
-  hand: { x: 0, y: 0, z: 0 },
+
+// Hardcoded default pose (values in radians)
+const HARDCODED_POSE = {
+  leftShoulder:  { x: -0.05, y: -0.45, z:  0.00 },
+  rightShoulder: { x:  0.00, y: -0.34, z: -0.16 },
+  leftUpperArm:  { x:  0.35, y:  1.83, z:  1.15 },
+  rightUpperArm: { x:  0.44, y: -1.31, z: -0.96 },
+  leftElbow:     { x: -0.60, y: -1.57, z: -0.80 },
+  rightElbow:    { x:  0.06, y:  1.18, z: -0.80 },
+  leftHand:      { x:  0.20, y: -0.30, z: -0.10 },
+  rightHand:     { x:  0.20, y:  0.34, z:  0.10 },
 };
 
-// Common bone name patterns for right arm across different rigs
+// Current pose values (in radians, initialized from hardcoded pose)
+let poseValues = {};
+for (const [key, val] of Object.entries(HARDCODED_POSE)) {
+  poseValues[key] = { x: val.x, y: val.y, z: val.z };
+}
+
+// Bone name search patterns for each pose key
 const BONE_SEARCH = {
-  shoulder: [
+  leftShoulder: [
+    "LeftShoulder", "Left_Shoulder", "leftShoulder",
+    "shoulder_L", "Shoulder_L", "l_shoulder", "lCollar",
+  ],
+  rightShoulder: [
     "RightShoulder", "Right_Shoulder", "rightShoulder",
-    "shoulder_R", "Shoulder_R", "r_shoulder",
-    "RightArm", "Right_Arm", "rightArm", "Arm_R",
-    "rShldrBend", "rCollar",
+    "shoulder_R", "Shoulder_R", "r_shoulder", "rCollar",
   ],
-  elbow: [
+  leftUpperArm: [
+    "LeftArm", "Left_Arm", "leftArm", "LeftUpperArm",
+    "Left_UpperArm", "leftUpperArm", "Arm_L",
+    "lShldrBend",
+  ],
+  rightUpperArm: [
+    "RightArm", "Right_Arm", "rightArm", "RightUpperArm",
+    "Right_UpperArm", "rightUpperArm", "Arm_R",
+    "rShldrBend",
+  ],
+  leftElbow: [
+    "LeftForeArm", "Left_ForeArm", "leftForeArm",
+    "LeftLowerArm", "Left_LowerArm", "leftLowerArm",
+    "forearm_L", "ForeArm_L", "lForearmBend",
+  ],
+  rightElbow: [
     "RightForeArm", "Right_ForeArm", "rightForeArm",
-    "forearm_R", "ForeArm_R", "r_forearm",
     "RightLowerArm", "Right_LowerArm", "rightLowerArm",
-    "rForearmBend",
+    "forearm_R", "ForeArm_R", "rForearmBend",
   ],
-  forearm: [
-    "RightForeArmTwist", "RightForearmTwist", "Right_ForeArm_Twist",
-    "forearm_twist_R", "RightForeArmRoll",
-    "rForearmTwist",
-    // Fallback: reuse elbow bone for twist if no dedicated twist bone
+  leftHand: [
+    "LeftHand", "Left_Hand", "leftHand",
+    "hand_L", "Hand_L", "l_hand", "lHand",
   ],
-  hand: [
+  rightHand: [
     "RightHand", "Right_Hand", "rightHand",
     "hand_R", "Hand_R", "r_hand", "rHand",
   ],
 };
+
+// UI section definitions
+const POSE_SECTIONS = [
+  { title: "L Shoulder",   key: "leftShoulder",  desc: "Position left arm" },
+  { title: "R Shoulder",   key: "rightShoulder", desc: "Position right arm" },
+  { title: "L Upper Arm",  key: "leftUpperArm",  desc: "Rotate left upper arm" },
+  { title: "R Upper Arm",  key: "rightUpperArm", desc: "Rotate right upper arm" },
+  { title: "L Elbow",      key: "leftElbow",     desc: "Bend left arm" },
+  { title: "R Elbow",      key: "rightElbow",    desc: "Bend right arm" },
+  { title: "L Hand",       key: "leftHand",      desc: "Fine align left hand" },
+  { title: "R Hand",       key: "rightHand",     desc: "Fine align right hand" },
+];
 
 function findBone(group, nameList) {
   for (const name of nameList) {
@@ -75,12 +113,6 @@ function discoverBones(group) {
     }
   }
 
-  // If no dedicated forearm twist bone, share elbow bone for twist
-  if (!boneRefs.forearm && boneRefs.elbow) {
-    boneRefs.forearm = boneRefs.elbow;
-    boneRestQuaternions.forearm = boneRestQuaternions.elbow;
-  }
-
   // Log discovered bones
   const discovered = Object.entries(boneRefs)
     .map(([k, b]) => `${k}: "${b.name}"`)
@@ -97,17 +129,12 @@ function discoverBones(group) {
   return Object.keys(boneRefs).length > 0;
 }
 
-function applyPoseTobone(key) {
+function applyPoseToBone(key) {
   const bone = boneRefs[key];
   if (!bone) return;
 
   const vals = poseValues[key];
-  const euler = new THREE.Euler(
-    THREE.MathUtils.degToRad(vals.x),
-    THREE.MathUtils.degToRad(vals.y),
-    THREE.MathUtils.degToRad(vals.z),
-    "XYZ"
-  );
+  const euler = new THREE.Euler(vals.x, vals.y, vals.z, "XYZ");
   const deltaQ = new THREE.Quaternion().setFromEuler(euler);
   const restQ = boneRestQuaternions[key];
 
@@ -120,35 +147,42 @@ function applyPoseTobone(key) {
 
 function applyAllPoses() {
   for (const key of Object.keys(poseValues)) {
-    applyPoseTobone(key);
+    applyPoseToBone(key);
   }
 }
 
-function createSliderGroup(label, key, axis, min, max) {
+// Slider range in radians: -pi to pi
+const SLIDER_MIN = -3.14;
+const SLIDER_MAX = 3.14;
+const SLIDER_STEP = 0.01;
+
+function createSliderGroup(label, key, axis) {
   const wrapper = document.createElement("div");
   wrapper.className = "pose-slider-row";
 
   const lbl = document.createElement("label");
-  lbl.textContent = `${label} ${axis.toUpperCase()}`;
+  lbl.textContent = `${axis.toUpperCase()}`;
   lbl.className = "pose-label";
 
   const valueSpan = document.createElement("span");
   valueSpan.className = "pose-value";
-  valueSpan.textContent = "0";
+  valueSpan.textContent = poseValues[key][axis].toFixed(2);
 
   const slider = document.createElement("input");
   slider.type = "range";
-  slider.min = min;
-  slider.max = max;
-  slider.value = 0;
-  slider.step = 1;
+  slider.min = SLIDER_MIN;
+  slider.max = SLIDER_MAX;
+  slider.value = poseValues[key][axis];
+  slider.step = SLIDER_STEP;
   slider.className = "pose-slider";
+  slider.dataset.key = key;
+  slider.dataset.axis = axis;
 
   slider.addEventListener("input", () => {
     const val = parseFloat(slider.value);
     poseValues[key][axis] = val;
-    valueSpan.textContent = val.toFixed(0);
-    applyPoseTobone(key);
+    valueSpan.textContent = val.toFixed(2);
+    applyPoseToBone(key);
   });
 
   wrapper.appendChild(lbl);
@@ -182,9 +216,9 @@ function createBoneSection(title, key, description) {
   section.appendChild(desc);
 
   if (boneRefs[key]) {
-    section.appendChild(createSliderGroup(title, key, "x", -180, 180));
-    section.appendChild(createSliderGroup(title, key, "y", -180, 180));
-    section.appendChild(createSliderGroup(title, key, "z", -180, 180));
+    section.appendChild(createSliderGroup(title, key, "x"));
+    section.appendChild(createSliderGroup(title, key, "y"));
+    section.appendChild(createSliderGroup(title, key, "z"));
   } else {
     const nobone = document.createElement("p");
     nobone.className = "pose-no-bone";
@@ -205,49 +239,65 @@ function buildPosePanel() {
   // Clear existing content
   content.innerHTML = "";
 
-  const sections = [
-    { title: "Shoulder", key: "shoulder", desc: "Position arm" },
-    { title: "Elbow", key: "elbow", desc: "Bend arm" },
-    { title: "Forearm / Twist", key: "forearm", desc: "Rotate inward" },
-    { title: "Wrist / Hand", key: "hand", desc: "Fine alignment" },
-  ];
-
-  for (const s of sections) {
+  for (const s of POSE_SECTIONS) {
     content.appendChild(createBoneSection(s.title, s.key, s.desc));
   }
 
-  // Reset button
+  // Reset to hardcoded pose button
   const resetBtn = document.createElement("button");
   resetBtn.className = "pose-btn pose-reset-btn";
-  resetBtn.textContent = "Reset Pose";
-  resetBtn.addEventListener("click", resetPose);
+  resetBtn.textContent = "Reset to Default Pose";
+  resetBtn.addEventListener("click", resetToHardcodedPose);
   content.appendChild(resetBtn);
+
+  // Zero all button
+  const zeroBtn = document.createElement("button");
+  zeroBtn.className = "pose-btn pose-reset-btn";
+  zeroBtn.textContent = "Zero All";
+  zeroBtn.addEventListener("click", zeroPose);
+  content.appendChild(zeroBtn);
 }
 
-function resetPose() {
+function resetToHardcodedPose() {
+  for (const [key, val] of Object.entries(HARDCODED_POSE)) {
+    poseValues[key] = { x: val.x, y: val.y, z: val.z };
+    applyPoseToBone(key);
+  }
+  syncSlidersToValues();
+}
+
+function zeroPose() {
   for (const key of Object.keys(poseValues)) {
     poseValues[key] = { x: 0, y: 0, z: 0 };
-    applyPoseTobone(key);
+    applyPoseToBone(key);
   }
-  // Reset all sliders
+  syncSlidersToValues();
+}
+
+function syncSlidersToValues() {
   const sliders = document.querySelectorAll(".pose-slider");
-  sliders.forEach((s) => { s.value = 0; });
-  const values = document.querySelectorAll(".pose-value");
-  values.forEach((v) => { v.textContent = "0"; });
+  sliders.forEach((s) => {
+    const key = s.dataset.key;
+    const axis = s.dataset.axis;
+    if (key && axis && poseValues[key]) {
+      s.value = poseValues[key][axis];
+      const valueSpan = s.parentElement.querySelector(".pose-value");
+      if (valueSpan) valueSpan.textContent = poseValues[key][axis].toFixed(2);
+    }
+  });
 }
 
 function copyPoseValues() {
   const output = {};
   for (const [key, vals] of Object.entries(poseValues)) {
     if (boneRefs[key]) {
-      output[key] = {
-        boneName: boneRefs[key].name,
-        rotation: { x: vals.x, y: vals.y, z: vals.z },
-      };
+      output[key] = { x: parseFloat(vals.x.toFixed(2)), y: parseFloat(vals.y.toFixed(2)), z: parseFloat(vals.z.toFixed(2)) };
     }
   }
-  const json = JSON.stringify(output, null, 2);
-  navigator.clipboard.writeText(json).then(() => {
+  const lines = Object.entries(output)
+    .map(([k, v]) => `${k}: { x: ${v.x.toFixed(2)}, y: ${v.y.toFixed(2)}, z: ${v.z.toFixed(2)} }`)
+    .join("\n");
+  navigator.clipboard.writeText(lines).then(() => {
     const btn = document.getElementById("copy-pose-btn");
     if (btn) {
       const orig = btn.textContent;
@@ -260,8 +310,7 @@ function copyPoseValues() {
     }
   }).catch((err) => {
     console.error("Failed to copy pose values:", err);
-    // Fallback: show in prompt
-    window.prompt("Pose values (copy manually):", json);
+    window.prompt("Pose values (copy manually):", lines);
   });
 }
 
@@ -285,7 +334,11 @@ function initPoseControls(avatarGroup) {
     const hasBones = discoverBones(avatarGroup);
     buildPosePanel();
 
-    if (!hasBones) {
+    if (hasBones) {
+      // Apply hardcoded pose on startup
+      applyAllPoses();
+      console.log("Pose Controls: Hardcoded default pose applied");
+    } else {
       console.warn("Pose Controls: No arm bones found in the model");
     }
   });
