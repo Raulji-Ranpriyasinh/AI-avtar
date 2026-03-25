@@ -156,7 +156,9 @@ function setAnimation(name) {
     if (prevAction) {
       prevAction.fadeOut(0.5);
     }
+    const prev = currentAnimation;
     currentAnimation = name;
+    addDebugLog("anim", `${prev} -> ${name}`);
   }
 }
 
@@ -227,7 +229,11 @@ function onSpeechUpdate() {
   const chosenAnim = isTalkingHint ? pickTalkingAnimation(hint) : (actions[hint] ? hint : pickTalkingAnimation(hint));
   setAnimation(chosenAnim);
 
+  const prevExpr = currentFacialExpression;
   currentFacialExpression = message.facialExpression || "default";
+  if (prevExpr !== currentFacialExpression) {
+    addDebugLog("expr", `${prevExpr || "default"} -> ${currentFacialExpression}`);
+  }
   currentLipsync = message.lipsync || null;
 
   if (message.audio) {
@@ -258,8 +264,11 @@ function updateFrame() {
   lerpMorphTarget("eyeBlinkRight", blink ? 1 : 0, 0.5);
 
   const appliedMorphTargets = [];
+  debugActiveViseme = null;
+  debugAudioTime = null;
   if (currentAudio && currentLipsync) {
     const currentAudioTime = currentAudio.currentTime;
+    debugAudioTime = currentAudioTime;
     for (let i = 0; i < currentLipsync.mouthCues.length; i++) {
       const mouthCue = currentLipsync.mouthCues[i];
       if (currentAudioTime >= mouthCue.start && currentAudioTime <= mouthCue.end) {
@@ -267,6 +276,7 @@ function updateFrame() {
         if (viseme) {
           appliedMorphTargets.push(viseme);
           lerpMorphTarget(viseme, 1, 0.2);
+          debugActiveViseme = `${mouthCue.value} -> ${viseme}`;
         }
         break;
       }
@@ -589,4 +599,26 @@ function updateAvatar(delta) {
   updateFrame();
 }
 
-export { loadAvatar, updateAvatar };
+let debugActiveViseme = null;
+let debugAudioTime = null;
+const debugLogs = [];
+const MAX_DEBUG_LOGS = 50;
+
+function addDebugLog(type, message) {
+  const ts = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  debugLogs.unshift({ type, message, ts });
+  if (debugLogs.length > MAX_DEBUG_LOGS) debugLogs.pop();
+}
+
+function getDebugState() {
+  return {
+    currentAnimation,
+    currentFacialExpression: currentFacialExpression || "default",
+    activeViseme: debugActiveViseme,
+    audioTime: debugAudioTime,
+    availableAnimations: Object.keys(actions),
+    logs: debugLogs,
+  };
+}
+
+export { loadAvatar, updateAvatar, getDebugState };

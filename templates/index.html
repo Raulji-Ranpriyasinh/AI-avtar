@@ -56,6 +56,47 @@
 
     <div id="canvas-container"></div>
 
+    <div id="debug-panel">
+      <div id="debug-header">
+        <span>Animation Debug</span>
+        <button id="debug-toggle" title="Toggle debug panel">_</button>
+      </div>
+      <div id="debug-body">
+        <div class="debug-section">
+          <div class="debug-label">Animation</div>
+          <div id="debug-animation" class="debug-value">--</div>
+        </div>
+        <div class="debug-section">
+          <div class="debug-label">Facial Expression</div>
+          <div id="debug-expression" class="debug-value">--</div>
+        </div>
+        <div class="debug-section">
+          <div class="debug-label">Active Viseme</div>
+          <div id="debug-viseme" class="debug-value">--</div>
+        </div>
+        <div class="debug-section">
+          <div class="debug-label">Audio Time</div>
+          <div id="debug-audio-time" class="debug-value">--</div>
+        </div>
+        <div class="debug-section">
+          <div class="debug-label">Message Queue</div>
+          <div id="debug-queue" class="debug-value">--</div>
+        </div>
+        <div class="debug-section">
+          <div class="debug-label">Speech State</div>
+          <div id="debug-speech-state" class="debug-value">--</div>
+        </div>
+        <div class="debug-section">
+          <div class="debug-label">Current Text</div>
+          <div id="debug-text" class="debug-value debug-text-value">--</div>
+        </div>
+        <div class="debug-section">
+          <div class="debug-label">Log</div>
+          <div id="debug-log" class="debug-value debug-log-area"></div>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="/static/js/app.js"></script>
   </body>
 </html>

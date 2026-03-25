@@ -21,6 +21,10 @@ function getState() {
   return { recording, currentMessage, loading };
 }
 
+function getMessageCount() {
+  return messages.length;
+}
+
 function onMessagePlayed() {
   messages.shift();
   if (messages.length > 0) {
@@ -128,6 +132,7 @@ function stopRecording() {
 export {
   subscribe,
   getState,
+  getMessageCount,
   onMessagePlayed,
   tts,
   startRecording,
