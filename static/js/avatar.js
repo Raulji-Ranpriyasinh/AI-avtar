@@ -459,14 +459,14 @@ const POSE_BONE_SEARCH = {
 
 // Default professional pose delta values (radians)
 const DEFAULT_POSE_DELTAS = {
-  leftShoulder:  { x: 0.13,  y: 0.09,  z: -0.02 },
-  rightShoulder: { x: 0.60,  y: 0.49,  z: -0.45 },
-  leftUpperArm:  { x: 0.31,  y: 1.22,  z: 1.29  },
-  rightUpperArm: { x: 0.13,  y: -1.51, z: -1.11 },
-  leftElbow:     { x: -0.82, y: -1.94, z: -0.31 },
-  rightElbow:    { x: -0.20, y: -1.11, z: 0.10  },
-  leftHand:      { x: 1.07,  y: -0.34, z: -0.24 },
-  rightHand:     { x: -0.89, y: 1.51,  z: 0.31  },
+leftShoulder: { x: 0.13, y: -0.05, z: -0.13 },
+rightShoulder: { x: 0.33, y: 0.60, z: -0.45 },
+leftUpperArm: { x: -0.16, y: 1.03, z: 1.29 },
+rightUpperArm: { x: 0.07, y: -1.42, z: -1.10 },
+leftElbow: { x: -0.93, y: -2.78, z: -0.97 },
+rightElbow: { x: -0.20, y: -0.49, z: -0.73 },
+leftHand: { x: 0.42, y: 1.00, z: -0.24 },
+rightHand: { x: -0.49, y: 1.29, z: 0.31 },
 // leftShoulder: { x: 0.00, y: 0.09, z: -0.02 },
 // rightShoulder: { x: 0.00, y: 0.16, z: -0.45 },
 // leftUpperArm: { x: 0.31, y: 1.29, z: 1.29 },
