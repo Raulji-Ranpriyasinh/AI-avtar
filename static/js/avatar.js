@@ -459,14 +459,22 @@ const POSE_BONE_SEARCH = {
 
 // Default professional pose delta values (radians)
 const DEFAULT_POSE_DELTAS = {
-  leftShoulder:  { x: 0, y: 0, z: 0 },
-  rightShoulder: { x: 0, y: 0, z: 0 },
-  leftUpperArm:  { x: 0.35, y: 0.15, z: 1.15 },
-  rightUpperArm: { x: 0.35, y: -0.15, z: -1.15 },
-  leftElbow:     { x: -0.2, y: 1.4, z: 0.1 },
-  rightElbow:    { x: -0.2, y: -1.4, z: 0.1 },
-  leftHand:      { x: 0.1, y: 0.2, z: -0.1 },
-  rightHand:     { x: 0.1, y: -0.2, z: 0.1 },
+  leftShoulder:  { x: 0.13,  y: 0.09,  z: -0.02 },
+  rightShoulder: { x: 0.60,  y: 0.49,  z: -0.45 },
+  leftUpperArm:  { x: 0.31,  y: 1.22,  z: 1.29  },
+  rightUpperArm: { x: 0.13,  y: -1.51, z: -1.11 },
+  leftElbow:     { x: -0.82, y: -1.94, z: -0.31 },
+  rightElbow:    { x: -0.20, y: -1.11, z: 0.10  },
+  leftHand:      { x: 1.07,  y: -0.34, z: -0.24 },
+  rightHand:     { x: -0.89, y: 1.51,  z: 0.31  },
+// leftShoulder: { x: 0.00, y: 0.09, z: -0.02 },
+// rightShoulder: { x: 0.00, y: 0.16, z: -0.45 },
+// leftUpperArm: { x: 0.31, y: 1.29, z: 1.29 },
+// rightUpperArm: { x: 0.31, y: -1.43, z: -1.11 },
+// leftElbow: { x: -0.82, y: 0.64, z: 0.20 },
+// rightElbow: { x: -0.56, y: -0.64, z: -0.34 },
+// leftHand: { x: -3.14, y: -1.65, z: 3.14 },
+// rightHand: { x: 0.13, y: 1.51, z: -0.78 },
 };
 
 function findPoseBones(group) {
