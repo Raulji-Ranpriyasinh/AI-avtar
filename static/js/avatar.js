@@ -459,14 +459,14 @@ const POSE_BONE_SEARCH = {
 
 // Default professional pose delta values (radians)
 const DEFAULT_POSE_DELTAS = {
-  leftShoulder:  { x: 0, y: 0, z: 0 },
-  rightShoulder: { x: 0, y: 0, z: 0 },
-  leftUpperArm:  { x: 0.35, y: 0.15, z: 1.15 },
-  rightUpperArm: { x: 0.35, y: -0.15, z: -1.15 },
-  leftElbow:     { x: -0.2, y: 1.4, z: 0.1 },
-  rightElbow:    { x: -0.2, y: -1.4, z: 0.1 },
-  leftHand:      { x: 0.1, y: 0.2, z: -0.1 },
-  rightHand:     { x: 0.1, y: -0.2, z: 0.1 },
+  leftShoulder:  { x: -0.05, y: -0.45, z:  0.00 },
+  rightShoulder: { x:  0.00, y: -0.34, z: -0.16 },
+  leftUpperArm:  { x:  0.35, y:  1.83, z:  1.15 },
+  rightUpperArm: { x:  0.44, y: -1.31, z: -0.96 },
+  leftElbow:     { x: -0.60, y: -1.57, z: -0.80 },
+  rightElbow:    { x:  0.06, y:  1.18, z: -0.80 },
+  leftHand:      { x:  0.20, y: -0.30, z: -0.10 },
+  rightHand:     { x:  0.20, y:  0.34, z:  0.10 },
 };
 
 function findPoseBones(group) {
@@ -763,9 +763,14 @@ function updateAvatar(delta) {
   updateFrame();
 }
 
+function getAvatarGroup() {
+  return avatarGroup;
+}
+
 export {
   loadAvatar,
   updateAvatar,
+  getAvatarGroup,
   applyPoseDeltas,
   rebuildIdleWithDeltas,
   DEFAULT_POSE_DELTAS,
