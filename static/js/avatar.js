@@ -446,35 +446,190 @@ function retargetAnimations(animGltf, avatarGroup) {
 }
 
 // Bone search patterns shared by pose creation and control panel
+// const POSE_BONE_SEARCH = {
+//   leftShoulder: ["LeftShoulder", "lCollar", "mixamorig:LeftShoulder"],
+//   rightShoulder: ["RightShoulder", "rCollar", "mixamorig:RightShoulder"],
+//   leftUpperArm: ["LeftArm", "lShldrBend", "mixamorig:LeftArm"],
+//   rightUpperArm: ["RightArm", "rShldrBend", "mixamorig:RightArm"],
+//   leftElbow: ["LeftForeArm", "lForearmBend", "mixamorig:LeftForeArm"],
+//   rightElbow: ["RightForeArm", "rForearmBend", "mixamorig:RightForeArm"],
+//   leftHand: ["LeftHand", "lHand", "mixamorig:LeftHand"],
+//   rightHand: ["RightHand", "rHand", "mixamorig:RightHand"],
+// };
 const POSE_BONE_SEARCH = {
-  leftShoulder: ["LeftShoulder", "lCollar", "mixamorig:LeftShoulder"],
-  rightShoulder: ["RightShoulder", "rCollar", "mixamorig:RightShoulder"],
-  leftUpperArm: ["LeftArm", "lShldrBend", "mixamorig:LeftArm"],
-  rightUpperArm: ["RightArm", "rShldrBend", "mixamorig:RightArm"],
-  leftElbow: ["LeftForeArm", "lForearmBend", "mixamorig:LeftForeArm"],
-  rightElbow: ["RightForeArm", "rForearmBend", "mixamorig:RightForeArm"],
-  leftHand: ["LeftHand", "lHand", "mixamorig:LeftHand"],
-  rightHand: ["RightHand", "rHand", "mixamorig:RightHand"],
-};
+  // Existing arm bones
+  leftShoulder:  ["LeftShoulder"],
+  rightShoulder: ["RightShoulder"],
+  leftUpperArm:  ["LeftArm"],
+  rightUpperArm: ["RightArm"],
+  leftElbow:     ["LeftForeArm"],
+  rightElbow:    ["RightForeArm"],
+  leftHand:      ["LeftHand"],
+  rightHand:     ["RightHand"],
 
+  // Finger bases
+  leftFingerBase:  ["LeftFingerBase"],
+  rightFingerBase: ["RightFingerBase"],
+
+  // Left thumb
+  leftThumb1: ["LeftHandThumb1"],
+  leftThumb2: ["LeftHandThumb2"],
+  leftThumb3: ["LeftHandThumb3"],
+
+  // Right thumb
+  rightThumb1: ["RightHandThumb1"],
+  rightThumb2: ["RightHandThumb2"],
+  rightThumb3: ["RightHandThumb3"],
+
+  // Left index
+  leftIndex1: ["LeftHandIndex1"],
+  leftIndex2: ["LeftHandIndex2"],
+  leftIndex3: ["LeftHandIndex3"],
+
+  // Right index
+  rightIndex1: ["RightHandIndex1"],
+  rightIndex2: ["RightHandIndex2"],
+  rightIndex3: ["RightHandIndex3"],
+
+  // Left middle
+  leftMiddle1: ["LeftHandMiddle1"],
+  leftMiddle2: ["LeftHandMiddle2"],
+  leftMiddle3: ["LeftHandMiddle3"],
+
+  // Right middle
+  rightMiddle1: ["RightHandMiddle1"],
+  rightMiddle2: ["RightHandMiddle2"],
+  rightMiddle3: ["RightHandMiddle3"],
+
+  // Left ring
+  leftRing1: ["LeftHandRing1"],
+  leftRing2: ["LeftHandRing2"],
+  leftRing3: ["LeftHandRing3"],
+
+  // Right ring
+  rightRing1: ["RightHandRing1"],
+  rightRing2: ["RightHandRing2"],
+  rightRing3: ["RightHandRing3"],
+
+  // Left pinky
+  leftPinky1: ["LeftHandPinky1"],
+  leftPinky2: ["LeftHandPinky2"],
+  leftPinky3: ["LeftHandPinky3"],
+
+  // Right pinky
+  rightPinky1: ["RightHandPinky1"],
+  rightPinky2: ["RightHandPinky2"],
+  rightPinky3: ["RightHandPinky3"],
+};
 // Default professional pose delta values (radians)
 const DEFAULT_POSE_DELTAS = {
-leftShoulder: { x: 0.13, y: -0.05, z: -0.13 },
-rightShoulder: { x: 0.33, y: 0.60, z: -0.45 },
-leftUpperArm: { x: -0.16, y: 1.03, z: 1.29 },
-rightUpperArm: { x: 0.07, y: -1.42, z: -1.10 },
-leftElbow: { x: -0.93, y: -2.78, z: -0.97 },
-rightElbow: { x: -0.20, y: -0.49, z: -0.73 },
-leftHand: { x: 0.42, y: 1.00, z: -0.24 },
-rightHand: { x: -0.49, y: 1.29, z: 0.31 },
-// leftShoulder: { x: 0.00, y: 0.09, z: -0.02 },
-// rightShoulder: { x: 0.00, y: 0.16, z: -0.45 },
-// leftUpperArm: { x: 0.31, y: 1.29, z: 1.29 },
-// rightUpperArm: { x: 0.31, y: -1.43, z: -1.11 },
-// leftElbow: { x: -0.82, y: 0.64, z: 0.20 },
-// rightElbow: { x: -0.56, y: -0.64, z: -0.34 },
-// leftHand: { x: -3.14, y: -1.65, z: 3.14 },
-// rightHand: { x: 0.13, y: 1.51, z: -0.78 },
+// leftShoulder: { x: 0.13, y: -0.05, z: -0.13 },
+// rightShoulder: { x: 0.33, y: 0.60, z: -0.45 },
+// leftUpperArm: { x: -0.16, y: 1.03, z: 1.29 },
+// rightUpperArm: { x: 0.07, y: -1.42, z: -1.10 },
+// leftElbow: { x: -0.93, y: -2.78, z: -0.97 },
+// rightElbow: { x: -0.20, y: -0.49, z: -0.73 },
+// leftHand: { x: 0.42, y: 1.00, z: -0.24 },
+// rightHand: { x: -0.49, y: 1.29, z: 0.31 },
+  // leftShoulder:  { x: 0, y: 0, z: 0 },
+  // rightShoulder: { x: 0, y: 0, z: 0 },
+  // leftUpperArm:  { x: 0, y: 0, z: 0 },
+  // rightUpperArm: { x: 0, y: 0, z: 0 },
+  // leftElbow:     { x: 0, y: 0, z: 0 },
+  // rightElbow:    { x: 0, y: 0, z: 0 },
+  // leftHand:      { x: 0, y: 0, z: 0 },
+  // rightHand:     { x: 0, y: 0, z: 0 },
+
+
+  // // Finger bases
+  // leftFingerBase:  { x: 0, y: 0, z: 0 },
+  // rightFingerBase: { x: 0, y: 0, z: 0 },
+
+  // // Left thumb - slightly curled inward
+  // leftThumb1: { x: 0.2,  y: 0.3,  z: 0.4  },
+  // leftThumb2: { x: 0.2,  y: 0.0,  z: 0.3  },
+  // leftThumb3: { x: 0.1,  y: 0.0,  z: 0.2  },
+
+  // // Right thumb - mirrored
+  // rightThumb1: { x: 0.2,  y: -0.3, z: -0.4 },
+  // rightThumb2: { x: 0.2,  y: 0.0,  z: -0.3 },
+  // rightThumb3: { x: 0.1,  y: 0.0,  z: -0.2 },
+
+  // // Left fingers - slightly curled (clasped pose)
+  // leftIndex1:  { x: 0.3, y: 0, z: 0 },
+  // leftIndex2:  { x: 0.4, y: 0, z: 0 },
+  // leftIndex3:  { x: 0.3, y: 0, z: 0 },
+
+  // leftMiddle1: { x: 0.3, y: 0, z: 0 },
+  // leftMiddle2: { x: 0.4, y: 0, z: 0 },
+  // leftMiddle3: { x: 0.3, y: 0, z: 0 },
+
+  // leftRing1:   { x: 0.3, y: 0, z: 0 },
+  // leftRing2:   { x: 0.4, y: 0, z: 0 },
+  // leftRing3:   { x: 0.3, y: 0, z: 0 },
+
+  // leftPinky1:  { x: 0.3, y: 0, z: 0 },
+  // leftPinky2:  { x: 0.4, y: 0, z: 0 },
+  // leftPinky3:  { x: 0.3, y: 0, z: 0 },
+
+  // // Right fingers - mirrored
+  // rightIndex1:  { x: 0.3, y: 0, z: 0 },
+  // rightIndex2:  { x: 0.4, y: 0, z: 0 },
+  // rightIndex3:  { x: 0.3, y: 0, z: 0 },
+
+  // rightMiddle1: { x: 0.3, y: 0, z: 0 },
+  // rightMiddle2: { x: 0.4, y: 0, z: 0 },
+  // rightMiddle3: { x: 0.3, y: 0, z: 0 },
+
+  // rightRing1:   { x: 0.3, y: 0, z: 0 },
+  // rightRing2:   { x: 0.4, y: 0, z: 0 },
+  // rightRing3:   { x: 0.3, y: 0, z: 0 },
+
+  // rightPinky1:  { x: 0.3, y: 0, z: 0 },
+  // rightPinky2:  { x: 0.4, y: 0, z: 0 },
+  // rightPinky3:  { x: 0.3, y: 0, z: 0 },
+
+
+  leftShoulder: { x: 0.00, y: 0.00, z: 0.00 },
+  rightShoulder: { x: 0.00, y: 0.00, z: 0.00 },
+leftUpperArm: { x: 0.00, y: 0.93, z: 1.21 },
+rightUpperArm: { x: 0.00, y: -0.93, z: -1.21 },
+leftElbow: { x: 0.00, y: 0.00, z: 1.29 },
+rightElbow: { x: 0.00, y: 0.00, z: -1.29 },
+leftHand: { x: 0.00, y: -1.03, z: 0.00 },
+rightHand: { x: 0.00, y: 1.03, z: 0.00 },
+leftFingerBase: { x: 0.00, y: 0.00, z: 0.00 },
+rightFingerBase: { x: 0.00, y: 0.00, z: 0.00 },
+leftThumb1: { x: -1.29, y: 0.45, z: 0.40 },
+leftThumb2: { x: 0.20, y: 0.00, z: 0.30 },
+leftThumb3: { x: 0.10, y: 0.00, z: 0.20 },
+rightThumb1: { x: -1.29, y: -0.45, z: -0.40 },
+rightThumb2: { x: 0.20, y: 0.00, z: -0.30 },
+rightThumb3: { x: 0.10, y: 0.00, z: -0.20 },
+leftIndex1: { x: 0.30, y: 0.00, z: 0.00 },
+leftIndex2: { x: 0.40, y: 0.00, z: 0.00 },
+leftIndex3: { x: 0.30, y: 0.00, z: 0.00 },
+leftMiddle1: { x: 0.30, y: 0.00, z: 0.00 },
+leftMiddle2: { x: 0.40, y: 0.00, z: 0.00 },
+leftMiddle3: { x: 0.30, y: 0.00, z: 0.00 },
+leftRing1: { x: 0.30, y: 0.00, z: 0.00 },
+leftRing2: { x: 0.40, y: 0.00, z: 0.00 },
+leftRing3: { x: 0.30, y: 0.00, z: 0.00 },
+leftPinky1: { x: 0.30, y: 0.00, z: 0.00 },
+leftPinky2: { x: 0.40, y: 0.00, z: 0.00 },
+leftPinky3: { x: 0.30, y: 0.42, z: 0.60 },
+rightIndex1: { x: 0.30, y: 0.00, z: 0.00 },
+rightIndex2: { x: 0.40, y: 0.00, z: 0.00 },
+rightIndex3: { x: 0.30, y: 0.00, z: 0.00 },
+rightMiddle1: { x: 0.30, y: 0.00, z: 0.00 },
+rightMiddle2: { x: 0.40, y: 0.00, z: 0.00 },
+rightMiddle3: { x: 0.30, y: 0.00, z: 0.00 },
+rightRing1: { x: 0.30, y: 0.00, z: 0.00 },
+rightRing2: { x: 0.40, y: 0.00, z: 0.00 },
+rightRing3: { x: 0.30, y: 0.00, z: 0.00 },
+rightPinky1: { x: 0.30, y: 0.00, z: 0.00 },
+rightPinky2: { x: 0.40, y: 0.00, z: 0.00 },
+rightPinky3: { x: 0.30, y: -0.42, z: -0.60 },
 };
 
 function findPoseBones(group) {
@@ -557,6 +712,50 @@ function createProfessionalIdleClip(avatarGroup, deltas) {
   addBoneTrack("leftHand", 0);
   addBoneTrack("rightHand", 0);
 
+// Finger bases
+addBoneTrack("leftFingerBase", 0);
+addBoneTrack("rightFingerBase", 0);
+
+// Thumbs
+addBoneTrack("leftThumb1", 0);
+addBoneTrack("leftThumb2", 0);
+addBoneTrack("leftThumb3", 0);
+addBoneTrack("rightThumb1", 0);
+addBoneTrack("rightThumb2", 0);
+addBoneTrack("rightThumb3", 0);
+
+// Index
+addBoneTrack("leftIndex1", 0);
+addBoneTrack("leftIndex2", 0);
+addBoneTrack("leftIndex3", 0);
+addBoneTrack("rightIndex1", 0);
+addBoneTrack("rightIndex2", 0);
+addBoneTrack("rightIndex3", 0);
+
+// Middle
+addBoneTrack("leftMiddle1", 0);
+addBoneTrack("leftMiddle2", 0);
+addBoneTrack("leftMiddle3", 0);
+addBoneTrack("rightMiddle1", 0);
+addBoneTrack("rightMiddle2", 0);
+addBoneTrack("rightMiddle3", 0);
+
+// Ring
+addBoneTrack("leftRing1", 0);
+addBoneTrack("leftRing2", 0);
+addBoneTrack("leftRing3", 0);
+addBoneTrack("rightRing1", 0);
+addBoneTrack("rightRing2", 0);
+addBoneTrack("rightRing3", 0);
+
+// Pinky
+addBoneTrack("leftPinky1", 0);
+addBoneTrack("leftPinky2", 0);
+addBoneTrack("leftPinky3", 0);
+addBoneTrack("rightPinky1", 0);
+addBoneTrack("rightPinky2", 0);
+addBoneTrack("rightPinky3", 0);
+
   if (tracks.length > 0) {
     const clip = new THREE.AnimationClip("Idle", duration, tracks);
     console.log("Professional idle pose animation created with", tracks.length, "bone tracks");
@@ -620,6 +819,11 @@ function loadAvatar(targetScene) {
           size: finalBox.getSize(new THREE.Vector3()),
         };
 
+        avatarScene.traverse((child) => {
+  if (child.isMesh) {
+    console.log("MESH:", child.name);
+  }
+});
         // Build morph target name mapping for non-standard models
         buildMorphNameMap();
 

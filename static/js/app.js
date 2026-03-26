@@ -203,7 +203,21 @@ function initPosePanel() {
   for (const [key, val] of Object.entries(DEFAULT_POSE_DELTAS)) {
     currentDeltas[key] = { x: val.x, y: val.y, z: val.z };
   }
-
+  const MIRROR_FLIP = { x: false, y: true, z: true };
+const MIRROR_MAP = {};
+for (const key of Object.keys(DEFAULT_POSE_DELTAS)) {
+  if (key.startsWith('left')) {
+    const rKey = 'right' + key.slice(4);
+    if (DEFAULT_POSE_DELTAS[rKey] !== undefined) MIRROR_MAP[key] = rKey;
+  }
+}
+let mirrorOn = true;
+const mirrorBtn = document.getElementById('pose-mirror-btn');
+mirrorBtn.addEventListener('click', () => {
+  mirrorOn = !mirrorOn;
+  mirrorBtn.textContent = mirrorOn ? '⬡ X Mirror: ON' : '⬡ X Mirror: OFF';
+  mirrorBtn.style.background = mirrorOn ? '#4a9eff' : '#555';
+});
   // Friendly labels for bone keys
   const boneLabels = {
     leftShoulder: "Left Shoulder",
@@ -255,16 +269,36 @@ function initPosePanel() {
       sliderRefs[key][axis] = { slider, valSpan };
 
       slider.addEventListener("input", () => {
-        const v = parseFloat(slider.value);
-        currentDeltas[key][axis] = v;
-        valSpan.textContent = v.toFixed(2);
-        applyPoseDeltas(currentDeltas);
-      });
+  const v = parseFloat(slider.value);
+  currentDeltas[key][axis] = v;
+  valSpan.textContent = v.toFixed(2);
+
+  // Mirror logic
+  if (mirrorOn) {
+    const mirrorKey = MIRROR_MAP[key] ||
+      (key.startsWith('right') ? 'left' + key.slice(5) : null);
+    if (mirrorKey && sliderRefs[mirrorKey]) {
+      const mirroredVal = MIRROR_FLIP[axis] ? -v : v;
+      currentDeltas[mirrorKey][axis] = mirroredVal;
+      sliderRefs[mirrorKey][axis].slider.value = mirroredVal;
+      sliderRefs[mirrorKey][axis].valSpan.textContent = mirroredVal.toFixed(2);
+    }
+  }
+
+  applyPoseDeltas(currentDeltas);
+});
 
       // On mouse up, rebuild the idle clip so it persists
-      slider.addEventListener("change", () => {
-        rebuildIdleWithDeltas(currentDeltas);
-      });
+     slider.addEventListener("change", () => {
+  if (mirrorOn) {
+    const mirrorKey = MIRROR_MAP[key] ||
+      (key.startsWith('right') ? 'left' + key.slice(5) : null);
+    if (mirrorKey) rebuildIdleWithDeltas(currentDeltas);
+    else rebuildIdleWithDeltas(currentDeltas);
+  } else {
+    rebuildIdleWithDeltas(currentDeltas);
+  }
+});
 
       group.appendChild(row);
     }
