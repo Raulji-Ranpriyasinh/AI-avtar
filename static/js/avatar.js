@@ -806,6 +806,17 @@ function loadAvatar(targetScene) {
         avatarGroup.add(avatarScene);
         scene.add(avatarGroup);
 
+        // Reset skeleton to bind pose so that all skinned meshes
+        // (body, hair, teeth, eyes, etc.) render consistently.
+        // Without this, models exported from Blender in a non-rest
+        // pose produce ghost/displaced meshes because the bone
+        // transforms no longer match the inverse bind matrices.
+        avatarScene.traverse((child) => {
+          if (child.isSkinnedMesh && child.skeleton) {
+            child.skeleton.pose();
+          }
+        });
+
         // Compute bounding box and position model so feet are at y=0
         avatarGroup.updateMatrixWorld(true);
         const box = new THREE.Box3().setFromObject(avatarGroup);
