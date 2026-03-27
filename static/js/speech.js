@@ -6,6 +6,7 @@ let chunks = [];
 let messages = [];
 let currentMessage = null;
 let loading = false;
+let streamAbortController = null;
 
 const listeners = [];
 
@@ -31,25 +32,59 @@ function onMessagePlayed() {
   notify();
 }
 
+async function processSSEStream(response) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop();
+
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        const payload = line.slice(6).trim();
+        if (payload === "[DONE]") continue;
+        try {
+          const msg = JSON.parse(payload);
+          messages.push(msg);
+          if (!currentMessage) {
+            currentMessage = messages[0];
+            loading = false;
+            notify();
+          }
+        } catch (e) {
+          // ignore malformed SSE events
+        }
+      }
+    }
+  }
+}
+
 async function tts(text) {
   if (loading || currentMessage) return;
   loading = true;
   notify();
+  streamAbortController = new AbortController();
   try {
-    const resp = await fetch(`${BACKEND_URL}/tts`, {
+    const resp = await fetch(`${BACKEND_URL}/tts/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: text }),
+      signal: streamAbortController.signal,
     });
-    const data = await resp.json();
-    messages.push(...data.messages);
-    if (!currentMessage && messages.length > 0) {
-      currentMessage = messages[0];
-    }
+    await processSSEStream(resp);
   } catch (err) {
-    console.error("TTS error:", err);
+    if (err.name !== "AbortError") {
+      console.error("TTS error:", err);
+    }
   } finally {
     loading = false;
+    streamAbortController = null;
     notify();
   }
 }
@@ -62,23 +97,26 @@ async function sendAudioData(audioBlob) {
       const base64Audio = reader.result.split(",")[1];
       loading = true;
       notify();
+      streamAbortController = new AbortController();
       try {
-        const resp = await fetch(`${BACKEND_URL}/sts`, {
+        const resp = await fetch(`${BACKEND_URL}/sts/stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ audio: base64Audio }),
+          signal: streamAbortController.signal,
         });
-        const data = await resp.json();
-        messages.push(...data.messages);
-        if (!currentMessage && messages.length > 0) {
-          currentMessage = messages[0];
-        }
+        await processSSEStream(resp);
         resolve();
       } catch (err) {
-        console.error("STS error:", err);
-        reject(err);
+        if (err.name !== "AbortError") {
+          console.error("STS error:", err);
+          reject(err);
+        } else {
+          resolve();
+        }
       } finally {
         loading = false;
+        streamAbortController = null;
         notify();
       }
     };
@@ -126,6 +164,10 @@ function stopRecording() {
 }
 
 function stopSpeech() {
+  if (streamAbortController) {
+    streamAbortController.abort();
+    streamAbortController = null;
+  }
   messages = [];
   currentMessage = null;
   loading = false;

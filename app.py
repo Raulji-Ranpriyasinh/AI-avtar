@@ -9,7 +9,7 @@ import tempfile
 import edge_tts
 import google.generativeai as genai
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 from flask_cors import CORS
 
 load_dotenv()
@@ -240,6 +240,63 @@ def tts():
     return jsonify({"messages": ai_messages})
 
 
+def stream_processed_messages(ai_messages):
+    """Generator that processes each message's TTS and lipsync one at a time,
+    yielding each as an SSE event as soon as it is ready."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    for i, msg in enumerate(ai_messages):
+        output_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
+        loop.run_until_complete(convert_text_to_speech(msg["text"], output_path))
+
+        try:
+            generate_lip_sync(i)
+            mp3_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
+            json_path = os.path.join(AUDIOS_DIR, f"message_{i}.json")
+            msg["audio"] = audio_file_to_base64(mp3_path)
+            msg["lipsync"] = read_json_transcript(json_path)
+        except Exception as e:
+            print(f"Error processing lip sync for message {i}: {e}")
+            msg["audio"] = ""
+            msg["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
+
+        yield f"data: {json.dumps(msg)}\n\n"
+
+    loop.close()
+    yield "data: [DONE]\n\n"
+
+
+@app.route("/tts/stream", methods=["POST"])
+def tts_stream():
+    data = request.get_json()
+    user_message = data.get("message", "")
+
+    default_msgs = get_default_messages(user_message)
+    if default_msgs is not None:
+        def generate_defaults():
+            for msg in default_msgs:
+                yield f"data: {json.dumps(msg)}\n\n"
+            yield "data: [DONE]\n\n"
+        return Response(
+            stream_with_context(generate_defaults()),
+            mimetype="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    try:
+        ai_messages = chat_with_gemini(user_message)
+    except Exception as e:
+        print(f"Gemini API error: {e}")
+        ai_messages = list(DEFAULT_RESPONSE)
+
+    return Response(
+        stream_with_context(stream_processed_messages(ai_messages)),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.route("/sts", methods=["POST"])
 def sts():
     data = request.get_json()
@@ -290,6 +347,75 @@ def sts():
 
     ai_messages = process_lip_sync(ai_messages)
     return jsonify({"messages": ai_messages})
+
+
+def transcribe_audio_to_text(base64_audio):
+    """Transcribe base64-encoded audio to text using Gemini."""
+    audio_bytes = base64.b64decode(base64_audio)
+
+    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp_in:
+        tmp_in.write(audio_bytes)
+        tmp_in_path = tmp_in.name
+
+    tmp_out_path = tmp_in_path.replace(".webm", ".wav")
+
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", tmp_in_path, tmp_out_path],
+            capture_output=True,
+            check=True,
+        )
+
+        if GEMINI_API_KEY:
+            genai.configure(api_key=GEMINI_API_KEY)
+            model = genai.GenerativeModel("gemini-2.5-flash")
+            with open(tmp_out_path, "rb") as audio_file:
+                audio_data = audio_file.read()
+            response = model.generate_content(
+                [
+                    "Transcribe this audio to text. Return ONLY the transcribed text, nothing else.",
+                    {"mime_type": "audio/wav", "data": audio_data},
+                ]
+            )
+            return response.text.strip()
+        else:
+            return ""
+    finally:
+        if os.path.exists(tmp_in_path):
+            os.unlink(tmp_in_path)
+        if os.path.exists(tmp_out_path):
+            os.unlink(tmp_out_path)
+
+
+@app.route("/sts/stream", methods=["POST"])
+def sts_stream():
+    data = request.get_json()
+    base64_audio = data.get("audio", "")
+
+    user_message = transcribe_audio_to_text(base64_audio)
+
+    if not user_message:
+        def generate_default():
+            for msg in DEFAULT_RESPONSE:
+                yield f"data: {json.dumps(msg)}\n\n"
+            yield "data: [DONE]\n\n"
+        return Response(
+            stream_with_context(generate_default()),
+            mimetype="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    try:
+        ai_messages = chat_with_gemini(user_message)
+    except Exception as e:
+        print(f"Gemini API error: {e}")
+        ai_messages = list(DEFAULT_RESPONSE)
+
+    return Response(
+        stream_with_context(stream_processed_messages(ai_messages)),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 if __name__ == "__main__":
