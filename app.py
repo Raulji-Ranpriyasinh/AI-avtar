@@ -85,7 +85,7 @@ def get_default_messages(user_message):
                 "animation": "TalkingOne",
             },
             {
-                "text": "I'm Jack, your personal AI assistant. I'm here to help you with anything you need.",
+                "text": "I'm Rey, your personal Medical assistant. I'm here to help you with anything you need.",
                 "audio": audio_file_to_base64(os.path.join(AUDIOS_DIR, "intro_1.wav")),
                 "lipsync": read_json_transcript(os.path.join(AUDIOS_DIR, "intro_1.json")),
                 "facialExpression": "smile",
@@ -101,13 +101,6 @@ def get_default_messages(user_message):
                 "lipsync": read_json_transcript(os.path.join(AUDIOS_DIR, "api_0.json")),
                 "facialExpression": "angry",
                 "animation": "TalkingOne",
-            },
-            {
-                "text": "You don't want to ruin Jack with a crazy bill, right?",
-                "audio": audio_file_to_base64(os.path.join(AUDIOS_DIR, "api_1.wav")),
-                "lipsync": read_json_transcript(os.path.join(AUDIOS_DIR, "api_1.json")),
-                "facialExpression": "smile",
-                "animation": "Angry",
             },
         ]
 
