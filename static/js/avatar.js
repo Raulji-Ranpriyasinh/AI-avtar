@@ -799,7 +799,7 @@ function loadAvatar(targetScene) {
 
   return new Promise((resolve, reject) => {
     loader.load(
-      "/static/models/avatar.glb",
+      "/static/models/newav.glb",
       (avatarGltf) => {
         avatarScene = avatarGltf.scene;
         avatarGroup = new THREE.Group();
