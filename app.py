@@ -5,11 +5,12 @@ import os
 import platform
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 
 import edge_tts
 import google.generativeai as genai
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 from flask_cors import CORS
 
 load_dotenv()
@@ -20,6 +21,13 @@ CORS(app)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 EDGE_TTS_VOICE = os.getenv("EDGE_TTS_VOICE", "en-US-JennyNeural")
 
+# Initialize Gemini model once at startup
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    gemini_model = genai.GenerativeModel("gemini-2.0-flash")
+else:
+    gemini_model = None
+
 AUDIOS_DIR = os.path.join(os.path.dirname(__file__), "audios")
 BIN_DIR = os.path.join(os.path.dirname(__file__), "bin")
 if platform.system() == "Windows":
@@ -28,7 +36,8 @@ else:
     RHUBARB_BIN = os.path.join(BIN_DIR, "rhubarb")
 
 SYSTEM_PROMPT = """You are Rey a Medical Health Expert Developed by reyna Solutions.
-You will always respond with a JSON array of messages, with a maximum of 3 messages.
+You will always respond with a JSON array of messages, with a maximum of 1 message.
+Only use multiple messages (up to 3) when the topic truly requires a multi-part explanation.
 Each message has properties for text, facialExpression, and animation.
 The different facial expressions are: smile, sad, angry, surprised, and default.
 The different animations are: Idle, TalkingOne, TalkingTwo, TalkingThree,
@@ -108,9 +117,9 @@ def get_default_messages(user_message):
 
 
 def chat_with_gemini(user_message):
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.5-flash")
-    response = model.generate_content(
+    if not gemini_model:
+        return list(DEFAULT_RESPONSE)
+    response = gemini_model.generate_content(
         [
             {"role": "user", "parts": [{"text": SYSTEM_PROMPT}]},
             {"role": "model", "parts": [{"text": '{"messages": [{"text": "Hello!", "facialExpression": "smile", "animation": "TalkingOne"}]}'}]},
@@ -180,7 +189,8 @@ def process_lip_sync(messages):
     loop.run_until_complete(generate_all_audio())
     loop.close()
 
-    for i, msg in enumerate(messages):
+    # Parallelize ffmpeg + rhubarb lip-sync generation
+    def process_single(i, msg):
         try:
             generate_lip_sync(i)
             mp3_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
@@ -192,7 +202,35 @@ def process_lip_sync(messages):
             msg["audio"] = ""
             msg["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
 
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = [executor.submit(process_single, i, msg) for i, msg in enumerate(messages)]
+        for f in futures:
+            f.result()
+
     return messages
+
+
+def process_single_message(i, msg):
+    """Process TTS and lip-sync for a single message (used by SSE streaming)."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    output_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
+    loop.run_until_complete(convert_text_to_speech(msg["text"], output_path))
+    loop.close()
+
+    try:
+        generate_lip_sync(i)
+        mp3_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
+        json_path = os.path.join(AUDIOS_DIR, f"message_{i}.json")
+        msg["audio"] = audio_file_to_base64(mp3_path)
+        msg["lipsync"] = read_json_transcript(json_path)
+    except Exception as e:
+        print(f"Error processing lip sync for message {i}: {e}")
+        msg["audio"] = ""
+        msg["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
+
+    return msg
 
 
 @app.route("/")
@@ -233,6 +271,49 @@ def tts():
     return jsonify({"messages": ai_messages})
 
 
+@app.route("/tts-stream", methods=["POST"])
+def tts_stream():
+    """SSE endpoint that streams each message as soon as its audio/lipsync is ready."""
+    data = request.get_json()
+    user_message = data.get("message", "")
+
+    default_msgs = get_default_messages(user_message)
+    if default_msgs is not None:
+        def generate_default():
+            for msg in default_msgs:
+                yield f"data: {json.dumps(msg)}\n\n"
+            yield "data: [DONE]\n\n"
+        return Response(
+            stream_with_context(generate_default()),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    try:
+        ai_messages = chat_with_gemini(user_message)
+    except Exception as e:
+        print(f"Gemini API error: {e}")
+        ai_messages = list(DEFAULT_RESPONSE)
+
+    def generate():
+        for i, msg in enumerate(ai_messages):
+            processed = process_single_message(i, msg)
+            yield f"data: {json.dumps(processed)}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @app.route("/sts", methods=["POST"])
 def sts():
     data = request.get_json()
@@ -252,12 +333,10 @@ def sts():
             check=True,
         )
 
-        if GEMINI_API_KEY:
-            genai.configure(api_key=GEMINI_API_KEY)
-            model = genai.GenerativeModel("gemini-2.5-flash")
+        if gemini_model:
             with open(tmp_out_path, "rb") as audio_file:
                 audio_data = audio_file.read()
-            response = model.generate_content(
+            response = gemini_model.generate_content(
                 [
                     "Transcribe this audio to text. Return ONLY the transcribed text, nothing else.",
                     {"mime_type": "audio/wav", "data": audio_data},
@@ -283,6 +362,40 @@ def sts():
 
     ai_messages = process_lip_sync(ai_messages)
     return jsonify({"messages": ai_messages})
+
+
+@app.route("/sts-stream", methods=["POST"])
+def sts_stream():
+    """SSE endpoint for speech-to-speech that streams each message.
+
+    Accepts pre-transcribed text from client-side Web Speech API.
+    """
+    data = request.get_json()
+    user_message = data.get("text", "")
+
+    if not user_message:
+        return jsonify({"messages": DEFAULT_RESPONSE})
+
+    try:
+        ai_messages = chat_with_gemini(user_message)
+    except Exception as e:
+        print(f"Gemini API error: {e}")
+        ai_messages = list(DEFAULT_RESPONSE)
+
+    def generate():
+        for i, msg in enumerate(ai_messages):
+            processed = process_single_message(i, msg)
+            yield f"data: {json.dumps(processed)}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 if __name__ == "__main__":
