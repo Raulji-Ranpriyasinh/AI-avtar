@@ -129,6 +129,9 @@ const morphTargets = [
   "tongueOut",
   "eyeBlinkLeft",
   "eyeBlinkRight",
+  "eyesClosed",
+  "eyesLookUp",
+  "eyesLookDown",
 ];
 
 export { facialExpressions, visemesMapping, morphTargets };
