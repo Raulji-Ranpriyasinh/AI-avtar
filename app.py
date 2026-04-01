@@ -7,7 +7,7 @@ import platform
 import subprocess
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import edge_tts
 import google.generativeai as genai
@@ -206,86 +206,69 @@ def generate_lip_sync(message_index):
                 message_index, total_lipsync, ffmpeg_time)
 
 
-def process_lip_sync(messages):
-    pipeline_start = time.perf_counter()
-    logger.info("[Pipeline] process_lip_sync START for %d message(s)", len(messages))
-
+def run_tts_for_message(i, text):
+    """Run TTS only for message i. Returns when mp3 is saved to disk."""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-
-    async def generate_all_audio():
-        tasks = []
-        for i, msg in enumerate(messages):
-            output_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
-            tasks.append(convert_text_to_speech(msg["text"], output_path))
-        await asyncio.gather(*tasks)
-
-    t_tts = time.perf_counter()
-    loop.run_until_complete(generate_all_audio())
+    output_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
+    loop.run_until_complete(convert_text_to_speech(text, output_path))
     loop.close()
-    tts_elapsed = time.perf_counter() - t_tts
-    logger.info("[Pipeline] All TTS generation took %.3fs (parallel)", tts_elapsed)
+    return i
 
-    # Parallelize ffmpeg + rhubarb lip-sync generation
-    def process_single(i, msg):
-        try:
-            generate_lip_sync(i)
-            mp3_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
-            json_path = os.path.join(AUDIOS_DIR, f"message_{i}.json")
-            msg["audio"] = audio_file_to_base64(mp3_path)
-            msg["lipsync"] = read_json_transcript(json_path)
-        except Exception as e:
-            logger.error("[Pipeline] Error processing lip sync for message %d: %s", i, e)
-            msg["audio"] = ""
-            msg["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
 
-    t_lip = time.perf_counter()
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = [executor.submit(process_single, i, msg) for i, msg in enumerate(messages)]
-        for f in futures:
-            f.result()
-    lip_elapsed = time.perf_counter() - t_lip
-    logger.info("[Pipeline] All lip-sync generation took %.3fs (parallel)", lip_elapsed)
+def run_lipsync_and_attach(i, msg):
+    """Run lip-sync (ffmpeg + rhubarb) and attach audio + lipsync data to msg."""
+    t0 = time.perf_counter()
+    generate_lip_sync(i)
+    mp3_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
+    json_path = os.path.join(AUDIOS_DIR, f"message_{i}.json")
+    msg["audio"] = audio_file_to_base64(mp3_path)
+    msg["lipsync"] = read_json_transcript(json_path)
+    elapsed = time.perf_counter() - t0
+    logger.info("[Pipeline] LipSync+attach for message_%d completed in %.3fs", i, elapsed)
+    return i
+
+
+def process_lip_sync(messages):
+    """Pipeline TTS and lip-sync: start all TTS concurrently, then start each
+    message's lip-sync as soon as its TTS finishes (overlapping with other TTS
+    jobs still running)."""
+    pipeline_start = time.perf_counter()
+    logger.info("[Pipeline] process_lip_sync START for %d message(s) (pipelined)", len(messages))
+
+    with ThreadPoolExecutor(max_workers=max(len(messages) * 2, 3)) as executor:
+        # Phase 1: Submit all TTS jobs concurrently
+        tts_futures = {}
+        for i, msg in enumerate(messages):
+            f = executor.submit(run_tts_for_message, i, msg["text"])
+            tts_futures[f] = i
+
+        # Phase 2: As each TTS completes, immediately start its lip-sync
+        lip_futures = {}
+        for completed_f in as_completed(tts_futures):
+            i = tts_futures[completed_f]
+            try:
+                completed_f.result()
+                logger.info("[Pipeline] TTS for message_%d done, starting lip-sync immediately", i)
+                lip_f = executor.submit(run_lipsync_and_attach, i, messages[i])
+                lip_futures[i] = lip_f
+            except Exception as e:
+                logger.error("[Pipeline] TTS failed for message %d: %s", i, e)
+                messages[i]["audio"] = ""
+                messages[i]["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
+
+        # Phase 3: Wait for all lip-sync jobs
+        for i, f in lip_futures.items():
+            try:
+                f.result()
+            except Exception as e:
+                logger.error("[Pipeline] LipSync failed for message %d: %s", i, e)
+                messages[i]["audio"] = ""
+                messages[i]["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
 
     total = time.perf_counter() - pipeline_start
-    logger.info("[Pipeline] process_lip_sync DONE in %.3fs (TTS=%.3fs + LipSync=%.3fs)",
-                total, tts_elapsed, lip_elapsed)
+    logger.info("[Pipeline] process_lip_sync DONE in %.3fs (pipelined TTS+LipSync)", total)
     return messages
-
-
-def process_single_message(i, msg):
-    """Process TTS and lip-sync for a single message (used by SSE streaming)."""
-    msg_start = time.perf_counter()
-    logger.info("[SSE] Processing message_%d START: '%s'", i, msg.get("text", "")[:60])
-
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    output_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
-    t_tts = time.perf_counter()
-    loop.run_until_complete(convert_text_to_speech(msg["text"], output_path))
-    loop.close()
-    tts_elapsed = time.perf_counter() - t_tts
-    logger.info("[SSE] TTS for message_%d took %.3fs", i, tts_elapsed)
-
-    try:
-        t_lip = time.perf_counter()
-        generate_lip_sync(i)
-        lip_elapsed = time.perf_counter() - t_lip
-        logger.info("[SSE] LipSync for message_%d took %.3fs", i, lip_elapsed)
-
-        mp3_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
-        json_path = os.path.join(AUDIOS_DIR, f"message_{i}.json")
-        msg["audio"] = audio_file_to_base64(mp3_path)
-        msg["lipsync"] = read_json_transcript(json_path)
-    except Exception as e:
-        logger.error("[SSE] Error processing lip sync for message %d: %s", i, e)
-        msg["audio"] = ""
-        msg["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
-
-    total = time.perf_counter() - msg_start
-    logger.info("[SSE] Message_%d DONE in %.3fs (TTS=%.3fs)", i, total, tts_elapsed)
-    return msg
 
 
 @app.route("/")
@@ -365,12 +348,31 @@ def tts_stream():
         ai_messages = list(DEFAULT_RESPONSE)
 
     def generate():
-        for i, msg in enumerate(ai_messages):
-            t_msg = time.perf_counter()
-            processed = process_single_message(i, msg)
-            logger.info("[/tts-stream] Streamed message_%d in %.3fs (time since request: %.3fs)",
-                        i, time.perf_counter() - t_msg, time.perf_counter() - request_start)
-            yield f"data: {json.dumps(processed)}\n\n"
+        with ThreadPoolExecutor(max_workers=max(len(ai_messages), 3)) as executor:
+            # Start ALL TTS jobs concurrently upfront
+            tts_futures = []
+            for i, msg in enumerate(ai_messages):
+                f = executor.submit(run_tts_for_message, i, msg["text"])
+                tts_futures.append(f)
+            logger.info("[/tts-stream] Submitted %d TTS jobs concurrently", len(ai_messages))
+
+            # Stream in order: wait for TTS → lip-sync → yield
+            # While lip-sync runs for message_i, TTS for message_i+1 is already running
+            for i, msg in enumerate(ai_messages):
+                t_msg = time.perf_counter()
+                tts_futures[i].result()  # Wait for this message's TTS
+
+                try:
+                    run_lipsync_and_attach(i, msg)
+                except Exception as e:
+                    logger.error("[/tts-stream] LipSync error for message %d: %s", i, e)
+                    msg["audio"] = ""
+                    msg["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
+
+                logger.info("[/tts-stream] Streamed message_%d in %.3fs (time since request: %.3fs)",
+                            i, time.perf_counter() - t_msg, time.perf_counter() - request_start)
+                yield f"data: {json.dumps(msg)}\n\n"
+
         total = time.perf_counter() - request_start
         logger.info("[/tts-stream] All messages streamed. Total request time: %.3fs", total)
         yield "data: [DONE]\n\n"
@@ -470,12 +472,30 @@ def sts_stream():
         ai_messages = list(DEFAULT_RESPONSE)
 
     def generate():
-        for i, msg in enumerate(ai_messages):
-            t_msg = time.perf_counter()
-            processed = process_single_message(i, msg)
-            logger.info("[/sts-stream] Streamed message_%d in %.3fs (time since request: %.3fs)",
-                        i, time.perf_counter() - t_msg, time.perf_counter() - request_start)
-            yield f"data: {json.dumps(processed)}\n\n"
+        with ThreadPoolExecutor(max_workers=max(len(ai_messages), 3)) as executor:
+            # Start ALL TTS jobs concurrently upfront
+            tts_futures = []
+            for i, msg in enumerate(ai_messages):
+                f = executor.submit(run_tts_for_message, i, msg["text"])
+                tts_futures.append(f)
+            logger.info("[/sts-stream] Submitted %d TTS jobs concurrently", len(ai_messages))
+
+            # Stream in order: wait for TTS → lip-sync → yield
+            for i, msg in enumerate(ai_messages):
+                t_msg = time.perf_counter()
+                tts_futures[i].result()  # Wait for this message's TTS
+
+                try:
+                    run_lipsync_and_attach(i, msg)
+                except Exception as e:
+                    logger.error("[/sts-stream] LipSync error for message %d: %s", i, e)
+                    msg["audio"] = ""
+                    msg["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
+
+                logger.info("[/sts-stream] Streamed message_%d in %.3fs (time since request: %.3fs)",
+                            i, time.perf_counter() - t_msg, time.perf_counter() - request_start)
+                yield f"data: {json.dumps(msg)}\n\n"
+
         total = time.perf_counter() - request_start
         logger.info("[/sts-stream] All messages streamed. Total request time: %.3fs", total)
         yield "data: [DONE]\n\n"
