@@ -1,24 +1,55 @@
 import asyncio
 import base64
 import json
+import logging
 import os
 import platform
 import subprocess
 import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import nltk
+
+nltk.download("averaged_perceptron_tagger", quiet=True)
+nltk.download("averaged_perceptron_tagger_eng", quiet=True)
+nltk.download("cmudict", quiet=True)
 
 import edge_tts
 import google.generativeai as genai
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 from flask_cors import CORS
+from g2p_en import G2p
 
 load_dotenv()
+
+# ── Logging setup ──────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger("avatar-perf")
+
+# ── Initialize G2p model once at startup for text-based viseme prediction ──
+logger.info("Initializing G2p model for viseme prediction...")
+_t_g2p = time.perf_counter()
+g2p_model = G2p()
+logger.info("G2p model initialized in %.3fs", time.perf_counter() - _t_g2p)
 
 app = Flask(__name__)
 CORS(app)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 EDGE_TTS_VOICE = os.getenv("EDGE_TTS_VOICE", "en-US-JennyNeural")
+
+# Initialize Gemini model once at startup
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    gemini_model = genai.GenerativeModel("gemini-2.0-flash")
+else:
+    gemini_model = None
 
 AUDIOS_DIR = os.path.join(os.path.dirname(__file__), "audios")
 BIN_DIR = os.path.join(os.path.dirname(__file__), "bin")
@@ -28,7 +59,8 @@ else:
     RHUBARB_BIN = os.path.join(BIN_DIR, "rhubarb")
 
 SYSTEM_PROMPT = """You are Rey a Medical Health Expert Developed by reyna Solutions.
-You will always respond with a JSON array of messages, with a maximum of 3 messages.
+You will always respond with a JSON array of messages, with a maximum of 1 message.
+Only use multiple messages (up to 3) when the topic truly requires a multi-part explanation.
 Each message has properties for text, facialExpression, and animation.
 The different facial expressions are: smile, sad, angry, surprised, and default.
 The different animations are: Idle, TalkingOne, TalkingTwo, TalkingThree,
@@ -108,15 +140,19 @@ def get_default_messages(user_message):
 
 
 def chat_with_gemini(user_message):
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.5-flash")
-    response = model.generate_content(
+    if not gemini_model:
+        logger.warning("Gemini model not initialized (no API key). Returning default response.")
+        return list(DEFAULT_RESPONSE)
+    t0 = time.perf_counter()
+    response = gemini_model.generate_content(
         [
             {"role": "user", "parts": [{"text": SYSTEM_PROMPT}]},
             {"role": "model", "parts": [{"text": '{"messages": [{"text": "Hello!", "facialExpression": "smile", "animation": "TalkingOne"}]}'}]},
             {"role": "user", "parts": [{"text": user_message}]},
         ]
     )
+    elapsed = time.perf_counter() - t0
+    logger.info("[Gemini API] generate_content took %.3fs", elapsed)
     text = response.text.strip()
     if text.startswith("```json"):
         text = text[7:]
@@ -126,72 +162,170 @@ def chat_with_gemini(user_message):
         text = text[:-3]
     text = text.strip()
     parsed = json.loads(text)
-    return parsed.get("messages", DEFAULT_RESPONSE)
+    messages = parsed.get("messages", DEFAULT_RESPONSE)
+    logger.info("[Gemini API] Returned %d message(s), total Gemini time: %.3fs", len(messages), elapsed)
+    return messages
 
 
 async def convert_text_to_speech(text, output_path):
+    t0 = time.perf_counter()
     communicate = edge_tts.Communicate(text, EDGE_TTS_VOICE)
     await communicate.save(output_path)
+    elapsed = time.perf_counter() - t0
+    logger.info("[TTS] edge-tts for '%s' -> %s took %.3fs", text[:50], os.path.basename(output_path), elapsed)
 
 
-def generate_lip_sync(message_index):
-    mp3_path = os.path.join(AUDIOS_DIR, f"message_{message_index}.mp3")
-    wav_path = os.path.join(AUDIOS_DIR, f"message_{message_index}.wav")
-    json_path = os.path.join(AUDIOS_DIR, f"message_{message_index}.json")
+# ── ARPAbet phoneme → Rhubarb mouth shape mapping ─────────────────────────
+PHONEME_TO_VISEME = {
+    # A: Closed lips (M, B, P)
+    "M": "A", "B": "A", "P": "A",
+    # B: Teeth / tongue contact
+    "S": "B", "T": "B", "D": "B", "N": "B", "K": "B", "G": "B",
+    "Z": "B", "L": "B", "SH": "B", "ZH": "B", "CH": "B", "JH": "B",
+    "NG": "B", "DX": "B", "NX": "B", "R": "B", "HH": "B",
+    # C: EE sound
+    "IY": "C", "IH": "C", "EY": "C", "Y": "C",
+    # D: Open mouth (AH, AA, AE)
+    "AA": "D", "AE": "D", "AH": "D", "AY": "D", "AW": "D",
+    "ER": "D", "EH": "D",
+    # E: Rounded O
+    "OW": "E", "OY": "E", "AO": "E",
+    # F: OO / U sound
+    "UW": "F", "UH": "F", "W": "F",
+    # G: F / V labiodental
+    "F": "G", "V": "G",
+    # H: TH (tongue between teeth)
+    "TH": "H", "DH": "H",
+}
 
-    subprocess.run(
-        ["ffmpeg", "-y", "-i", mp3_path, wav_path],
-        capture_output=True,
-        check=True,
+VOWEL_PHONEMES = {
+    "AA", "AE", "AH", "AO", "AW", "AY",
+    "EH", "ER", "EY", "IH", "IY",
+    "OW", "OY", "UH", "UW",
+}
+
+
+def predict_visemes_from_text(text):
+    """Predict mouth cues from text using G2p phoneme conversion.
+    Returns (estimated_duration, mouth_cues) in Rhubarb-compatible format."""
+    t0 = time.perf_counter()
+    phonemes = g2p_model(text)
+
+    mouth_cues = []
+    current_time = 0.0
+
+    for phoneme in phonemes:
+        base = phoneme.rstrip("012")  # Strip stress markers
+
+        if base == " ":
+            current_time += 0.05  # Word gap
+            continue
+        if base in (".", ",", "!", "?", ";", ":", "-", '"', "'"):
+            current_time += 0.25  # Punctuation pause
+            continue
+
+        viseme = PHONEME_TO_VISEME.get(base, "X")
+        duration = 0.12 if base in VOWEL_PHONEMES else 0.07
+
+        end_time = current_time + duration
+        mouth_cues.append({
+            "start": round(current_time, 3),
+            "end": round(end_time, 3),
+            "value": viseme,
+        })
+        current_time = end_time
+
+    elapsed = time.perf_counter() - t0
+    logger.info("[Viseme] Text → %d cues in %.3fs (est. duration %.2fs)",
+                len(mouth_cues), elapsed, current_time)
+    return current_time, mouth_cues
+
+
+def scale_visemes_to_duration(mouth_cues, estimated_duration, actual_duration):
+    """Scale viseme timings to match actual audio duration."""
+    if estimated_duration <= 0 or actual_duration <= 0:
+        return mouth_cues
+    scale = actual_duration / estimated_duration
+    for cue in mouth_cues:
+        cue["start"] = round(cue["start"] * scale, 3)
+        cue["end"] = round(cue["end"] * scale, 3)
+    return mouth_cues
+
+
+def get_audio_duration(mp3_path):
+    """Get audio duration in seconds using ffprobe."""
+    result = subprocess.run(
+        ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", mp3_path],
+        capture_output=True, text=True,
     )
+    try:
+        return float(result.stdout.strip())
+    except (ValueError, AttributeError):
+        return 0.0
 
-    if os.path.isfile(RHUBARB_BIN):
-        result = subprocess.run(
-            [RHUBARB_BIN, "-f", "json", "-o", json_path, wav_path, "-r", "phonetic"],
-            capture_output=True,
-        )
-        if result.returncode != 0:
-            print(f"WARNING: Rhubarb failed with exit code {result.returncode}.")
-            if result.stderr:
-                print(f"Rhubarb stderr: {result.stderr.decode(errors='replace')}")
-            if result.stdout:
-                print(f"Rhubarb stdout: {result.stdout.decode(errors='replace')}")
-            empty_lipsync = {"metadata": {"duration": 0}, "mouthCues": []}
-            with open(json_path, "w") as f:
-                json.dump(empty_lipsync, f)
-    else:
-        print(f"WARNING: Rhubarb binary not found at {RHUBARB_BIN}. Lip sync will be empty. Download from https://github.com/DanielSWolf/rhubarb-lip-sync/releases")
-        empty_lipsync = {"metadata": {"duration": 0}, "mouthCues": []}
-        with open(json_path, "w") as f:
-            json.dump(empty_lipsync, f)
+
+def process_message_parallel(i, msg):
+    """Run TTS and text-based viseme prediction for a single message.
+    Viseme prediction runs instantly from text (~0.1s) while TTS generates
+    audio (~4-5s). After TTS completes, viseme timings are scaled to match
+    the actual audio duration."""
+    text = msg["text"]
+    msg_start = time.perf_counter()
+    logger.info("[Pipeline] Processing message_%d START: '%s'", i, text[:60])
+
+    # Step 1: Viseme prediction from text (instant, ~0.1s)
+    estimated_duration, mouth_cues = predict_visemes_from_text(text)
+
+    # Step 2: TTS (the bottleneck, ~4-5s)
+    t_tts = time.perf_counter()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    output_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
+    loop.run_until_complete(convert_text_to_speech(text, output_path))
+    loop.close()
+    tts_elapsed = time.perf_counter() - t_tts
+
+    # Step 3: Get actual duration and scale visemes to match audio
+    actual_duration = get_audio_duration(output_path)
+    scaled_cues = scale_visemes_to_duration(mouth_cues, estimated_duration, actual_duration)
+
+    msg["audio"] = audio_file_to_base64(output_path)
+    msg["lipsync"] = {
+        "metadata": {"duration": actual_duration},
+        "mouthCues": scaled_cues,
+    }
+
+    total = time.perf_counter() - msg_start
+    logger.info(
+        "[Pipeline] Message_%d DONE in %.3fs (TTS=%.3fs, viseme=instant, duration=%.2fs)",
+        i, total, tts_elapsed, actual_duration,
+    )
+    return msg
 
 
 def process_lip_sync(messages):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    """Process all messages: TTS + text-based viseme prediction.
+    All messages run concurrently via ThreadPoolExecutor."""
+    pipeline_start = time.perf_counter()
+    logger.info("[Pipeline] process_lip_sync START for %d message(s)", len(messages))
 
-    async def generate_all_audio():
-        tasks = []
-        for i, msg in enumerate(messages):
-            output_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
-            tasks.append(convert_text_to_speech(msg["text"], output_path))
-        await asyncio.gather(*tasks)
+    with ThreadPoolExecutor(max_workers=max(len(messages), 3)) as executor:
+        futures = {
+            executor.submit(process_message_parallel, i, msg): i
+            for i, msg in enumerate(messages)
+        }
+        for f in as_completed(futures):
+            i = futures[f]
+            try:
+                f.result()
+            except Exception as e:
+                logger.error("[Pipeline] Failed for message %d: %s", i, e)
+                messages[i]["audio"] = ""
+                messages[i]["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
 
-    loop.run_until_complete(generate_all_audio())
-    loop.close()
-
-    for i, msg in enumerate(messages):
-        try:
-            generate_lip_sync(i)
-            mp3_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
-            json_path = os.path.join(AUDIOS_DIR, f"message_{i}.json")
-            msg["audio"] = audio_file_to_base64(mp3_path)
-            msg["lipsync"] = read_json_transcript(json_path)
-        except Exception as e:
-            print(f"Error processing lip sync for message {i}: {e}")
-            msg["audio"] = ""
-            msg["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
-
+    total = time.perf_counter() - pipeline_start
+    logger.info("[Pipeline] process_lip_sync DONE in %.3fs", total)
     return messages
 
 
@@ -216,25 +350,102 @@ def get_voices():
 
 @app.route("/tts", methods=["POST"])
 def tts():
+    request_start = time.perf_counter()
     data = request.get_json()
     user_message = data.get("message", "")
+    logger.info("[/tts] Request received: '%s'", user_message[:80])
 
     default_msgs = get_default_messages(user_message)
     if default_msgs is not None:
         return jsonify({"messages": default_msgs})
 
     try:
+        t0 = time.perf_counter()
         ai_messages = chat_with_gemini(user_message)
+        logger.info("[/tts] Gemini call took %.3fs", time.perf_counter() - t0)
     except Exception as e:
-        print(f"Gemini API error: {e}")
+        logger.error("[/tts] Gemini API error: %s", e)
         ai_messages = list(DEFAULT_RESPONSE)
 
     ai_messages = process_lip_sync(ai_messages)
+
+    total = time.perf_counter() - request_start
+    logger.info("[/tts] Total request time: %.3fs", total)
     return jsonify({"messages": ai_messages})
+
+
+@app.route("/tts-stream", methods=["POST"])
+def tts_stream():
+    """SSE endpoint that streams each message as soon as its audio/lipsync is ready."""
+    request_start = time.perf_counter()
+    data = request.get_json()
+    user_message = data.get("message", "")
+    logger.info("[/tts-stream] Request received: '%s'", user_message[:80])
+
+    default_msgs = get_default_messages(user_message)
+    if default_msgs is not None:
+        def generate_default():
+            for msg in default_msgs:
+                yield f"data: {json.dumps(msg)}\n\n"
+            yield "data: [DONE]\n\n"
+        return Response(
+            stream_with_context(generate_default()),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    try:
+        t0 = time.perf_counter()
+        ai_messages = chat_with_gemini(user_message)
+        logger.info("[/tts-stream] Gemini call took %.3fs", time.perf_counter() - t0)
+    except Exception as e:
+        logger.error("[/tts-stream] Gemini API error: %s", e)
+        ai_messages = list(DEFAULT_RESPONSE)
+
+    def generate():
+        with ThreadPoolExecutor(max_workers=max(len(ai_messages), 3)) as executor:
+            # Submit all messages concurrently (each does TTS + viseme)
+            msg_futures = []
+            for i, msg in enumerate(ai_messages):
+                f = executor.submit(process_message_parallel, i, msg)
+                msg_futures.append(f)
+            logger.info("[/tts-stream] Submitted %d messages for parallel processing", len(ai_messages))
+
+            # Stream in order as each completes
+            for i, f in enumerate(msg_futures):
+                t_wait = time.perf_counter()
+                try:
+                    f.result()
+                except Exception as e:
+                    logger.error("[/tts-stream] Failed for message %d: %s", i, e)
+                    ai_messages[i]["audio"] = ""
+                    ai_messages[i]["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
+
+                logger.info("[/tts-stream] Message_%d ready in %.3fs (time since request: %.3fs)",
+                            i, time.perf_counter() - t_wait, time.perf_counter() - request_start)
+                yield f"data: {json.dumps(ai_messages[i])}\n\n"
+
+        total = time.perf_counter() - request_start
+        logger.info("[/tts-stream] All messages streamed. Total: %.3fs", total)
+        yield "data: [DONE]\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.route("/sts", methods=["POST"])
 def sts():
+    request_start = time.perf_counter()
+    logger.info("[/sts] Request received (audio transcription + chat)")
     data = request.get_json()
     base64_audio = data.get("audio", "")
     audio_bytes = base64.b64decode(base64_audio)
@@ -246,24 +457,27 @@ def sts():
     tmp_out_path = tmp_in_path.replace(".webm", ".wav")
 
     try:
+        t_ffmpeg = time.perf_counter()
         subprocess.run(
             ["ffmpeg", "-y", "-i", tmp_in_path, tmp_out_path],
             capture_output=True,
             check=True,
         )
+        logger.info("[/sts] ffmpeg webm->wav took %.3fs", time.perf_counter() - t_ffmpeg)
 
-        if GEMINI_API_KEY:
-            genai.configure(api_key=GEMINI_API_KEY)
-            model = genai.GenerativeModel("gemini-2.5-flash")
+        if gemini_model:
             with open(tmp_out_path, "rb") as audio_file:
                 audio_data = audio_file.read()
-            response = model.generate_content(
+            t_stt = time.perf_counter()
+            response = gemini_model.generate_content(
                 [
                     "Transcribe this audio to text. Return ONLY the transcribed text, nothing else.",
                     {"mime_type": "audio/wav", "data": audio_data},
                 ]
             )
+            stt_elapsed = time.perf_counter() - t_stt
             user_message = response.text.strip()
+            logger.info("[/sts] Gemini STT took %.3fs -> '%s'", stt_elapsed, user_message[:80])
         else:
             user_message = ""
     finally:
@@ -276,13 +490,77 @@ def sts():
         return jsonify({"messages": DEFAULT_RESPONSE})
 
     try:
+        t0 = time.perf_counter()
         ai_messages = chat_with_gemini(user_message)
+        logger.info("[/sts] Gemini chat took %.3fs", time.perf_counter() - t0)
     except Exception as e:
-        print(f"Gemini API error: {e}")
+        logger.error("[/sts] Gemini API error: %s", e)
         ai_messages = list(DEFAULT_RESPONSE)
 
     ai_messages = process_lip_sync(ai_messages)
+
+    total = time.perf_counter() - request_start
+    logger.info("[/sts] Total request time: %.3fs", total)
     return jsonify({"messages": ai_messages})
+
+
+@app.route("/sts-stream", methods=["POST"])
+def sts_stream():
+    """SSE endpoint for speech-to-speech that streams each message.
+
+    Accepts pre-transcribed text from client-side Web Speech API.
+    """
+    request_start = time.perf_counter()
+    data = request.get_json()
+    user_message = data.get("text", "")
+    logger.info("[/sts-stream] Request received (client-side STT): '%s'", user_message[:80])
+
+    if not user_message:
+        return jsonify({"messages": DEFAULT_RESPONSE})
+
+    try:
+        t0 = time.perf_counter()
+        ai_messages = chat_with_gemini(user_message)
+        logger.info("[/sts-stream] Gemini call took %.3fs", time.perf_counter() - t0)
+    except Exception as e:
+        logger.error("[/sts-stream] Gemini API error: %s", e)
+        ai_messages = list(DEFAULT_RESPONSE)
+
+    def generate():
+        with ThreadPoolExecutor(max_workers=max(len(ai_messages), 3)) as executor:
+            # Submit all messages concurrently (each does TTS + viseme)
+            msg_futures = []
+            for i, msg in enumerate(ai_messages):
+                f = executor.submit(process_message_parallel, i, msg)
+                msg_futures.append(f)
+            logger.info("[/sts-stream] Submitted %d messages for parallel processing", len(ai_messages))
+
+            # Stream in order
+            for i, f in enumerate(msg_futures):
+                t_wait = time.perf_counter()
+                try:
+                    f.result()
+                except Exception as e:
+                    logger.error("[/sts-stream] Failed for message %d: %s", i, e)
+                    ai_messages[i]["audio"] = ""
+                    ai_messages[i]["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
+
+                logger.info("[/sts-stream] Message_%d ready in %.3fs (time since request: %.3fs)",
+                            i, time.perf_counter() - t_wait, time.perf_counter() - request_start)
+                yield f"data: {json.dumps(ai_messages[i])}\n\n"
+
+        total = time.perf_counter() - request_start
+        logger.info("[/sts-stream] All messages streamed. Total: %.3fs", total)
+        yield "data: [DONE]\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 if __name__ == "__main__":
