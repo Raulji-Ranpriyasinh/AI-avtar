@@ -1,10 +1,12 @@
 import asyncio
 import base64
 import json
+import logging
 import os
 import platform
 import subprocess
 import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import edge_tts
@@ -14,6 +16,14 @@ from flask import Flask, Response, jsonify, render_template, request, stream_wit
 from flask_cors import CORS
 
 load_dotenv()
+
+# ── Logging setup ──────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger("avatar-perf")
 
 app = Flask(__name__)
 CORS(app)
@@ -118,7 +128,9 @@ def get_default_messages(user_message):
 
 def chat_with_gemini(user_message):
     if not gemini_model:
+        logger.warning("Gemini model not initialized (no API key). Returning default response.")
         return list(DEFAULT_RESPONSE)
+    t0 = time.perf_counter()
     response = gemini_model.generate_content(
         [
             {"role": "user", "parts": [{"text": SYSTEM_PROMPT}]},
@@ -126,6 +138,8 @@ def chat_with_gemini(user_message):
             {"role": "user", "parts": [{"text": user_message}]},
         ]
     )
+    elapsed = time.perf_counter() - t0
+    logger.info("[Gemini API] generate_content took %.3fs", elapsed)
     text = response.text.strip()
     if text.startswith("```json"):
         text = text[7:]
@@ -135,12 +149,17 @@ def chat_with_gemini(user_message):
         text = text[:-3]
     text = text.strip()
     parsed = json.loads(text)
-    return parsed.get("messages", DEFAULT_RESPONSE)
+    messages = parsed.get("messages", DEFAULT_RESPONSE)
+    logger.info("[Gemini API] Returned %d message(s), total Gemini time: %.3fs", len(messages), elapsed)
+    return messages
 
 
 async def convert_text_to_speech(text, output_path):
+    t0 = time.perf_counter()
     communicate = edge_tts.Communicate(text, EDGE_TTS_VOICE)
     await communicate.save(output_path)
+    elapsed = time.perf_counter() - t0
+    logger.info("[TTS] edge-tts for '%s' -> %s took %.3fs", text[:50], os.path.basename(output_path), elapsed)
 
 
 def generate_lip_sync(message_index):
@@ -148,34 +167,49 @@ def generate_lip_sync(message_index):
     wav_path = os.path.join(AUDIOS_DIR, f"message_{message_index}.wav")
     json_path = os.path.join(AUDIOS_DIR, f"message_{message_index}.json")
 
+    t0 = time.perf_counter()
     subprocess.run(
         ["ffmpeg", "-y", "-i", mp3_path, wav_path],
         capture_output=True,
         check=True,
     )
+    ffmpeg_time = time.perf_counter() - t0
+    logger.info("[LipSync] ffmpeg mp3->wav for message_%d took %.3fs", message_index, ffmpeg_time)
 
     if os.path.isfile(RHUBARB_BIN):
+        t1 = time.perf_counter()
         result = subprocess.run(
             [RHUBARB_BIN, "-f", "json", "-o", json_path, wav_path, "-r", "phonetic"],
             capture_output=True,
         )
+        rhubarb_time = time.perf_counter() - t1
         if result.returncode != 0:
-            print(f"WARNING: Rhubarb failed with exit code {result.returncode}.")
+            logger.warning("[LipSync] Rhubarb FAILED for message_%d (exit %d) in %.3fs",
+                           message_index, result.returncode, rhubarb_time)
             if result.stderr:
-                print(f"Rhubarb stderr: {result.stderr.decode(errors='replace')}")
+                logger.warning("Rhubarb stderr: %s", result.stderr.decode(errors='replace'))
             if result.stdout:
-                print(f"Rhubarb stdout: {result.stdout.decode(errors='replace')}")
+                logger.warning("Rhubarb stdout: %s", result.stdout.decode(errors='replace'))
             empty_lipsync = {"metadata": {"duration": 0}, "mouthCues": []}
             with open(json_path, "w") as f:
                 json.dump(empty_lipsync, f)
+        else:
+            logger.info("[LipSync] Rhubarb for message_%d took %.3fs", message_index, rhubarb_time)
     else:
-        print(f"WARNING: Rhubarb binary not found at {RHUBARB_BIN}. Lip sync will be empty. Download from https://github.com/DanielSWolf/rhubarb-lip-sync/releases")
+        logger.warning("[LipSync] Rhubarb binary not found at %s. Lip sync will be empty.", RHUBARB_BIN)
         empty_lipsync = {"metadata": {"duration": 0}, "mouthCues": []}
         with open(json_path, "w") as f:
             json.dump(empty_lipsync, f)
 
+    total_lipsync = time.perf_counter() - t0
+    logger.info("[LipSync] Total lip-sync for message_%d: %.3fs (ffmpeg=%.3fs)",
+                message_index, total_lipsync, ffmpeg_time)
+
 
 def process_lip_sync(messages):
+    pipeline_start = time.perf_counter()
+    logger.info("[Pipeline] process_lip_sync START for %d message(s)", len(messages))
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
@@ -186,8 +220,11 @@ def process_lip_sync(messages):
             tasks.append(convert_text_to_speech(msg["text"], output_path))
         await asyncio.gather(*tasks)
 
+    t_tts = time.perf_counter()
     loop.run_until_complete(generate_all_audio())
     loop.close()
+    tts_elapsed = time.perf_counter() - t_tts
+    logger.info("[Pipeline] All TTS generation took %.3fs (parallel)", tts_elapsed)
 
     # Parallelize ffmpeg + rhubarb lip-sync generation
     def process_single(i, msg):
@@ -198,38 +235,56 @@ def process_lip_sync(messages):
             msg["audio"] = audio_file_to_base64(mp3_path)
             msg["lipsync"] = read_json_transcript(json_path)
         except Exception as e:
-            print(f"Error processing lip sync for message {i}: {e}")
+            logger.error("[Pipeline] Error processing lip sync for message %d: %s", i, e)
             msg["audio"] = ""
             msg["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
 
+    t_lip = time.perf_counter()
     with ThreadPoolExecutor(max_workers=3) as executor:
         futures = [executor.submit(process_single, i, msg) for i, msg in enumerate(messages)]
         for f in futures:
             f.result()
+    lip_elapsed = time.perf_counter() - t_lip
+    logger.info("[Pipeline] All lip-sync generation took %.3fs (parallel)", lip_elapsed)
 
+    total = time.perf_counter() - pipeline_start
+    logger.info("[Pipeline] process_lip_sync DONE in %.3fs (TTS=%.3fs + LipSync=%.3fs)",
+                total, tts_elapsed, lip_elapsed)
     return messages
 
 
 def process_single_message(i, msg):
     """Process TTS and lip-sync for a single message (used by SSE streaming)."""
+    msg_start = time.perf_counter()
+    logger.info("[SSE] Processing message_%d START: '%s'", i, msg.get("text", "")[:60])
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
     output_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
+    t_tts = time.perf_counter()
     loop.run_until_complete(convert_text_to_speech(msg["text"], output_path))
     loop.close()
+    tts_elapsed = time.perf_counter() - t_tts
+    logger.info("[SSE] TTS for message_%d took %.3fs", i, tts_elapsed)
 
     try:
+        t_lip = time.perf_counter()
         generate_lip_sync(i)
+        lip_elapsed = time.perf_counter() - t_lip
+        logger.info("[SSE] LipSync for message_%d took %.3fs", i, lip_elapsed)
+
         mp3_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
         json_path = os.path.join(AUDIOS_DIR, f"message_{i}.json")
         msg["audio"] = audio_file_to_base64(mp3_path)
         msg["lipsync"] = read_json_transcript(json_path)
     except Exception as e:
-        print(f"Error processing lip sync for message {i}: {e}")
+        logger.error("[SSE] Error processing lip sync for message %d: %s", i, e)
         msg["audio"] = ""
         msg["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
 
+    total = time.perf_counter() - msg_start
+    logger.info("[SSE] Message_%d DONE in %.3fs (TTS=%.3fs)", i, total, tts_elapsed)
     return msg
 
 
@@ -254,28 +309,37 @@ def get_voices():
 
 @app.route("/tts", methods=["POST"])
 def tts():
+    request_start = time.perf_counter()
     data = request.get_json()
     user_message = data.get("message", "")
+    logger.info("[/tts] Request received: '%s'", user_message[:80])
 
     default_msgs = get_default_messages(user_message)
     if default_msgs is not None:
         return jsonify({"messages": default_msgs})
 
     try:
+        t0 = time.perf_counter()
         ai_messages = chat_with_gemini(user_message)
+        logger.info("[/tts] Gemini call took %.3fs", time.perf_counter() - t0)
     except Exception as e:
-        print(f"Gemini API error: {e}")
+        logger.error("[/tts] Gemini API error: %s", e)
         ai_messages = list(DEFAULT_RESPONSE)
 
     ai_messages = process_lip_sync(ai_messages)
+
+    total = time.perf_counter() - request_start
+    logger.info("[/tts] Total request time: %.3fs", total)
     return jsonify({"messages": ai_messages})
 
 
 @app.route("/tts-stream", methods=["POST"])
 def tts_stream():
     """SSE endpoint that streams each message as soon as its audio/lipsync is ready."""
+    request_start = time.perf_counter()
     data = request.get_json()
     user_message = data.get("message", "")
+    logger.info("[/tts-stream] Request received: '%s'", user_message[:80])
 
     default_msgs = get_default_messages(user_message)
     if default_msgs is not None:
@@ -293,15 +357,22 @@ def tts_stream():
         )
 
     try:
+        t0 = time.perf_counter()
         ai_messages = chat_with_gemini(user_message)
+        logger.info("[/tts-stream] Gemini call took %.3fs", time.perf_counter() - t0)
     except Exception as e:
-        print(f"Gemini API error: {e}")
+        logger.error("[/tts-stream] Gemini API error: %s", e)
         ai_messages = list(DEFAULT_RESPONSE)
 
     def generate():
         for i, msg in enumerate(ai_messages):
+            t_msg = time.perf_counter()
             processed = process_single_message(i, msg)
+            logger.info("[/tts-stream] Streamed message_%d in %.3fs (time since request: %.3fs)",
+                        i, time.perf_counter() - t_msg, time.perf_counter() - request_start)
             yield f"data: {json.dumps(processed)}\n\n"
+        total = time.perf_counter() - request_start
+        logger.info("[/tts-stream] All messages streamed. Total request time: %.3fs", total)
         yield "data: [DONE]\n\n"
 
     return Response(
@@ -316,6 +387,8 @@ def tts_stream():
 
 @app.route("/sts", methods=["POST"])
 def sts():
+    request_start = time.perf_counter()
+    logger.info("[/sts] Request received (audio transcription + chat)")
     data = request.get_json()
     base64_audio = data.get("audio", "")
     audio_bytes = base64.b64decode(base64_audio)
@@ -327,22 +400,27 @@ def sts():
     tmp_out_path = tmp_in_path.replace(".webm", ".wav")
 
     try:
+        t_ffmpeg = time.perf_counter()
         subprocess.run(
             ["ffmpeg", "-y", "-i", tmp_in_path, tmp_out_path],
             capture_output=True,
             check=True,
         )
+        logger.info("[/sts] ffmpeg webm->wav took %.3fs", time.perf_counter() - t_ffmpeg)
 
         if gemini_model:
             with open(tmp_out_path, "rb") as audio_file:
                 audio_data = audio_file.read()
+            t_stt = time.perf_counter()
             response = gemini_model.generate_content(
                 [
                     "Transcribe this audio to text. Return ONLY the transcribed text, nothing else.",
                     {"mime_type": "audio/wav", "data": audio_data},
                 ]
             )
+            stt_elapsed = time.perf_counter() - t_stt
             user_message = response.text.strip()
+            logger.info("[/sts] Gemini STT took %.3fs -> '%s'", stt_elapsed, user_message[:80])
         else:
             user_message = ""
     finally:
@@ -355,12 +433,17 @@ def sts():
         return jsonify({"messages": DEFAULT_RESPONSE})
 
     try:
+        t0 = time.perf_counter()
         ai_messages = chat_with_gemini(user_message)
+        logger.info("[/sts] Gemini chat took %.3fs", time.perf_counter() - t0)
     except Exception as e:
-        print(f"Gemini API error: {e}")
+        logger.error("[/sts] Gemini API error: %s", e)
         ai_messages = list(DEFAULT_RESPONSE)
 
     ai_messages = process_lip_sync(ai_messages)
+
+    total = time.perf_counter() - request_start
+    logger.info("[/sts] Total request time: %.3fs", total)
     return jsonify({"messages": ai_messages})
 
 
@@ -370,22 +453,31 @@ def sts_stream():
 
     Accepts pre-transcribed text from client-side Web Speech API.
     """
+    request_start = time.perf_counter()
     data = request.get_json()
     user_message = data.get("text", "")
+    logger.info("[/sts-stream] Request received (client-side STT): '%s'", user_message[:80])
 
     if not user_message:
         return jsonify({"messages": DEFAULT_RESPONSE})
 
     try:
+        t0 = time.perf_counter()
         ai_messages = chat_with_gemini(user_message)
+        logger.info("[/sts-stream] Gemini call took %.3fs", time.perf_counter() - t0)
     except Exception as e:
-        print(f"Gemini API error: {e}")
+        logger.error("[/sts-stream] Gemini API error: %s", e)
         ai_messages = list(DEFAULT_RESPONSE)
 
     def generate():
         for i, msg in enumerate(ai_messages):
+            t_msg = time.perf_counter()
             processed = process_single_message(i, msg)
+            logger.info("[/sts-stream] Streamed message_%d in %.3fs (time since request: %.3fs)",
+                        i, time.perf_counter() - t_msg, time.perf_counter() - request_start)
             yield f"data: {json.dumps(processed)}\n\n"
+        total = time.perf_counter() - request_start
+        logger.info("[/sts-stream] All messages streamed. Total request time: %.3fs", total)
         yield "data: [DONE]\n\n"
 
     return Response(
