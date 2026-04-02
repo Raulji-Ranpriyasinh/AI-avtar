@@ -5,12 +5,16 @@ import os
 import platform
 import subprocess
 import tempfile
+from enum import Enum
+from typing import List
 
 import edge_tts
 import google.generativeai as genai
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 from flask_cors import CORS
+from langchain_google_genai import ChatGoogleGenerativeAI
+from pydantic import BaseModel, Field
 
 load_dotenv()
 
@@ -27,8 +31,49 @@ if platform.system() == "Windows":
 else:
     RHUBARB_BIN = os.path.join(BIN_DIR, "rhubarb")
 
+# ---------------------------------------------------------------------------
+# LangChain Structured Output Models
+# ---------------------------------------------------------------------------
+
+
+class FacialExpression(str, Enum):
+    smile = "smile"
+    sad = "sad"
+    angry = "angry"
+    surprised = "surprised"
+    default = "default"
+
+
+class Animation(str, Enum):
+    Idle = "Idle"
+    TalkingOne = "TalkingOne"
+    TalkingTwo = "TalkingTwo"
+    TalkingThree = "TalkingThree"
+    DismissingGesture = "DismissingGesture"
+    ThoughtfulHeadShake = "ThoughtfulHeadShake"
+
+
+class AvatarMessage(BaseModel):
+    """A single avatar response message with text, expression, and animation."""
+    text: str = Field(description="The response text to speak")
+    facialExpression: FacialExpression = Field(
+        description="Facial expression: smile, sad, angry, surprised, or default"
+    )
+    animation: Animation = Field(
+        description="Animation to play: Idle, TalkingOne, TalkingTwo, TalkingThree, DismissingGesture, or ThoughtfulHeadShake"
+    )
+
+
+class AvatarResponse(BaseModel):
+    """A list of avatar messages (maximum 3)."""
+    messages: List[AvatarMessage] = Field(
+        description="List of messages (max 3) with text, facialExpression, and animation",
+        max_length=3,
+    )
+
+
 SYSTEM_PROMPT = """You are Rey a Medical Health Expert Developed by reyna Solutions.
-You will always respond with a JSON array of messages, with a maximum of 3 messages.
+You will always respond with a maximum of 3 messages.
 Each message has properties for text, facialExpression, and animation.
 The different facial expressions are: smile, sad, angry, surprised, and default.
 The different animations are: Idle, TalkingOne, TalkingTwo, TalkingThree,
@@ -42,18 +87,7 @@ IMPORTANT animation guidelines:
 - Use ThoughtfulHeadShake for disagreeing or correcting information.
 - Use Idle only when the avatar should pause briefly between thoughts.
 - For multi-message responses, create a natural flow: e.g. start with a gesture, then talk,
-  then settle into an idle.
-
-Respond ONLY with valid JSON in this exact format:
-{
-  "messages": [
-    {
-      "text": "Your response text here",
-      "facialExpression": "smile",
-      "animation": "TalkingOne"
-    }
-  ]
-}"""
+  then settle into an idle."""
 
 DEFAULT_RESPONSE = [
     {
@@ -107,26 +141,27 @@ def get_default_messages(user_message):
     return None
 
 
+# ---------------------------------------------------------------------------
+# LangChain structured output chat
+# ---------------------------------------------------------------------------
+
+
 def chat_with_gemini(user_message):
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.5-flash")
-    response = model.generate_content(
+    """Use LangChain with structured output to get typed AvatarResponse."""
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash",
+        google_api_key=GEMINI_API_KEY,
+    )
+    structured_llm = llm.with_structured_output(AvatarResponse)
+
+    response = structured_llm.invoke(
         [
-            {"role": "user", "parts": [{"text": SYSTEM_PROMPT}]},
-            {"role": "model", "parts": [{"text": '{"messages": [{"text": "Hello!", "facialExpression": "smile", "animation": "TalkingOne"}]}'}]},
-            {"role": "user", "parts": [{"text": user_message}]},
+            ("system", SYSTEM_PROMPT),
+            ("human", user_message),
         ]
     )
-    text = response.text.strip()
-    if text.startswith("```json"):
-        text = text[7:]
-    if text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    text = text.strip()
-    parsed = json.loads(text)
-    return parsed.get("messages", DEFAULT_RESPONSE)
+
+    return [msg.model_dump() for msg in response.messages]
 
 
 async def convert_text_to_speech(text, output_path):
@@ -166,33 +201,45 @@ def generate_lip_sync(message_index):
             json.dump(empty_lipsync, f)
 
 
-def process_lip_sync(messages):
+def generate_tts_for_message(index, text):
+    """Generate TTS audio for a single message (synchronous wrapper)."""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-
-    async def generate_all_audio():
-        tasks = []
-        for i, msg in enumerate(messages):
-            output_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
-            tasks.append(convert_text_to_speech(msg["text"], output_path))
-        await asyncio.gather(*tasks)
-
-    loop.run_until_complete(generate_all_audio())
+    output_path = os.path.join(AUDIOS_DIR, f"message_{index}.mp3")
+    loop.run_until_complete(convert_text_to_speech(text, output_path))
     loop.close()
 
-    for i, msg in enumerate(messages):
-        try:
-            generate_lip_sync(i)
-            mp3_path = os.path.join(AUDIOS_DIR, f"message_{i}.mp3")
-            json_path = os.path.join(AUDIOS_DIR, f"message_{i}.json")
-            msg["audio"] = audio_file_to_base64(mp3_path)
-            msg["lipsync"] = read_json_transcript(json_path)
-        except Exception as e:
-            print(f"Error processing lip sync for message {i}: {e}")
-            msg["audio"] = ""
-            msg["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
 
-    return messages
+def process_single_message(index, msg):
+    """Generate TTS + lipsync for a single message and return enriched dict."""
+    try:
+        generate_tts_for_message(index, msg["text"])
+        generate_lip_sync(index)
+        mp3_path = os.path.join(AUDIOS_DIR, f"message_{index}.mp3")
+        json_path = os.path.join(AUDIOS_DIR, f"message_{index}.json")
+        msg["audio"] = audio_file_to_base64(mp3_path)
+        msg["lipsync"] = read_json_transcript(json_path)
+    except Exception as e:
+        print(f"Error processing TTS/lipsync for message {index}: {e}")
+        msg["audio"] = ""
+        msg["lipsync"] = {"metadata": {"duration": 0}, "mouthCues": []}
+    return msg
+
+
+# ---------------------------------------------------------------------------
+# SSE helpers
+# ---------------------------------------------------------------------------
+
+
+def sse_event(data, event=None):
+    """Format a single SSE event string."""
+    lines = []
+    if event:
+        lines.append(f"event: {event}")
+    lines.append(f"data: {json.dumps(data)}")
+    lines.append("")
+    lines.append("")
+    return "\n".join(lines)
 
 
 @app.route("/")
@@ -219,18 +266,53 @@ def tts():
     data = request.get_json()
     user_message = data.get("message", "")
 
+    # Handle default / no-API-key cases with a simple JSON response
     default_msgs = get_default_messages(user_message)
     if default_msgs is not None:
         return jsonify({"messages": default_msgs})
 
-    try:
-        ai_messages = chat_with_gemini(user_message)
-    except Exception as e:
-        print(f"Gemini API error: {e}")
-        ai_messages = list(DEFAULT_RESPONSE)
+    # --- SSE streaming response ---
+    def generate():
+        # 1. Send "thinking" status
+        yield sse_event({"status": "thinking"})
 
-    ai_messages = process_lip_sync(ai_messages)
-    return jsonify({"messages": ai_messages})
+        # 2. Call Gemini via LangChain structured output
+        try:
+            ai_messages = chat_with_gemini(user_message)
+        except Exception as e:
+            print(f"Gemini API error: {e}")
+            ai_messages = list(DEFAULT_RESPONSE)
+
+        count = len(ai_messages)
+
+        # 3. Send "generating_audio" status with count
+        yield sse_event({"status": "generating_audio", "count": count})
+
+        # 4. For each message, generate TTS + lipsync, then stream it
+        for i, msg in enumerate(ai_messages):
+            enriched = process_single_message(i, msg)
+            yield sse_event({
+                "status": "message",
+                "message": i,
+                "audio": enriched.get("audio", ""),
+                "lipsync": enriched.get("lipsync", {}),
+                "facialExpression": enriched.get("facialExpression", "default"),
+                "animation": enriched.get("animation", "Idle"),
+                "text": enriched.get("text", ""),
+            })
+
+        # 5. Send "done" status
+        yield sse_event({"status": "done"})
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @app.route("/sts", methods=["POST"])
@@ -275,14 +357,42 @@ def sts():
     if not user_message:
         return jsonify({"messages": DEFAULT_RESPONSE})
 
-    try:
-        ai_messages = chat_with_gemini(user_message)
-    except Exception as e:
-        print(f"Gemini API error: {e}")
-        ai_messages = list(DEFAULT_RESPONSE)
+    # --- SSE streaming response for speech-to-speech ---
+    def generate():
+        yield sse_event({"status": "thinking"})
 
-    ai_messages = process_lip_sync(ai_messages)
-    return jsonify({"messages": ai_messages})
+        try:
+            ai_messages = chat_with_gemini(user_message)
+        except Exception as e:
+            print(f"Gemini API error: {e}")
+            ai_messages = list(DEFAULT_RESPONSE)
+
+        count = len(ai_messages)
+        yield sse_event({"status": "generating_audio", "count": count})
+
+        for i, msg in enumerate(ai_messages):
+            enriched = process_single_message(i, msg)
+            yield sse_event({
+                "status": "message",
+                "message": i,
+                "audio": enriched.get("audio", ""),
+                "lipsync": enriched.get("lipsync", {}),
+                "facialExpression": enriched.get("facialExpression", "default"),
+                "animation": enriched.get("animation", "Idle"),
+                "text": enriched.get("text", ""),
+            })
+
+        yield sse_event({"status": "done"})
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 if __name__ == "__main__":

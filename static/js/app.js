@@ -163,7 +163,14 @@ function initChatUI() {
   subscribe(() => {
     const state = getState();
     if (state.loading) {
-      statusText.textContent = "Loading...";
+      // Show granular SSE status when available
+      if (state.sseStatus === "thinking") {
+        statusText.textContent = "Thinking...";
+      } else if (state.sseStatus === "generating_audio") {
+        statusText.textContent = "Generating audio...";
+      } else {
+        statusText.textContent = "Loading...";
+      }
       sendBtn.disabled = true;
       sendBtn.classList.add("disabled");
     } else if (state.currentMessage) {

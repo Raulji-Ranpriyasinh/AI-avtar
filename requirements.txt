@@ -3,3 +3,6 @@ flask-cors>=4.0
 google-generativeai>=0.5
 edge-tts>=6.1
 python-dotenv>=1.0
+langchain>=0.3
+langchain-google-genai>=2.0
+pydantic>=2.0
