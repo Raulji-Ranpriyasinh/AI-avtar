@@ -802,6 +802,18 @@
       stopSpeech();
     });
 
+        document.getElementById("ai-avatar-about-btn").onclick = () => {
+        tts("Explain ABOUT US section of our company in a friendly tone.");
+      };
+
+      document.getElementById("ai-avatar-tech-section").onclick = () => {
+        tts("Explain our TECHNOLOGY in simple and engaging terms.");
+      };
+
+      document.getElementById("ai-avatar-services-btn").onclick = () => {
+        tts("Describe our SERVICES clearly for a website visitor.");
+      };
+
     // Update progress bar and CC based on speech state
     subscribe(() => {
       const state = getState();
@@ -871,5 +883,6 @@ document.querySelectorAll('.ai-avatar-nav-btn').forEach(btn => {
   });
 });
   </script>
+
 </body>
 </html>
