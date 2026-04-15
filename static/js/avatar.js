@@ -223,6 +223,7 @@ function pickIdleAnimation() {
 function onSpeechUpdate() {
   const state = getState();
   const message = state.currentMessage;
+  
   if (!message) {
     setAnimation(pickIdleAnimation());
     currentLipsync = null;
@@ -243,14 +244,35 @@ function onSpeechUpdate() {
   currentLipsync = message.lipsync || null;
 
   if (message.audio) {
+    // Ensure previous audio is completely stopped before playing new one
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      currentAudio = null;
+    }
+    
     const audio = new Audio("data:audio/mp3;base64," + message.audio);
+    const msgIndex = message.messageIndex !== undefined ? message.messageIndex + 1 : 1;
+    const totalMsgs = message.totalMessages || 1;
+    
+    console.log(`[AVATAR] ▶️ Playing message ${msgIndex}/${totalMsgs} | Animation: ${chosenAnim} | Expression: ${currentFacialExpression}`);
+    
     audio.play();
     currentAudio = audio;
+    
     audio.onended = () => {
+      console.log(`[AVATAR] ✅ Message ${msgIndex}/${totalMsgs} playback completed`);
       currentAudio = null;
-      onMessagePlayed();
+      onMessagePlayed(); // This will trigger next message in queue
+    };
+    
+    audio.onerror = (err) => {
+      console.error(`[AVATAR] ❌ Audio playback error for message ${msgIndex}:`, err);
+      currentAudio = null;
+      onMessagePlayed(); // Move to next message even on error
     };
   } else {
+    console.log(`[AVATAR] ⚠️ No audio for message, skipping after 2s delay`);
     setTimeout(() => onMessagePlayed(), 2000);
   }
 }

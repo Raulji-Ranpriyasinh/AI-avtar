@@ -175,6 +175,9 @@ function initChatUI() {
         "Type a message and press enter to chat with the AI.";
       sendBtn.disabled = false;
       sendBtn.classList.remove("disabled");
+      // Clear latency display when idle
+      const latencyEl = document.getElementById("latency-display");
+      if (latencyEl) latencyEl.textContent = "";
     }
   });
 }
