@@ -572,9 +572,10 @@
         </button>
       </div>
 
-      <div style="display: none;" class="ai-avatar-ctrl-row">
+      <div class="ai-avatar-ctrl-row">
         <button id="ai-avatar-about-btn" class="ai-avatar-pill-btn">ABOUT US</button>
-        <button id="ai-avatar-testimonials-btn" class="ai-avatar-pill-btn">TESTIMONIALS</button>
+        <button id="ai-avatar-tech-section" class="ai-avatar-pill-btn">TECHNOLOGY</button>
+        <button id="ai-avatar-services-btn" class="ai-avatar-pill-btn">SERVICES</button>
       </div>
 
       <div class="ai-avatar-progress-wrap">
@@ -606,6 +607,8 @@
     const stopBtn = document.getElementById("ai-avatar-stop-btn");
     const aboutBtn = document.getElementById("ai-avatar-about-btn");
     const testimonialsBtn = document.getElementById("ai-avatar-testimonials-btn");
+    const servicesBtn = document.getElementById("ai-avatar-services-btn");
+    const techBtn=document.getElementById("ai-avatar-tech-section")
     const progressBar = document.getElementById("ai-avatar-progress");
 
     let ccEnabled = false;
@@ -676,11 +679,14 @@
           if (avatarInfo) {
             const { center, size } = avatarInfo;
             // const targetY = size.y * 0.5;
-            const targetY = center.y - size.y * 0.5 + size.y * 0.78;
+            const AVATAR_SCALE = 0.4;
+            const zoomCompensation = 1 / AVATAR_SCALE;
+            const targetY = center.y - size.y * 0.4 + size.y * 0.9;
             controls.target.set(center.x, targetY, center.z);
             const fovRad = camera.fov * (Math.PI / 180);
             // const frameHeight = size.y * 1.0;
-            const frameHeight = size.y * 0.65;
+            // const frameHeight = size.y * 0.65;
+             const frameHeight = size.y * 0.4 * zoomCompensation;
             const distance = frameHeight / (2 * Math.tan(fovRad / 2));
             camera.position.set(center.x, targetY, center.z + distance);
             camera.updateProjectionMatrix();
@@ -779,11 +785,18 @@
       const el = document.getElementById("company");
       if (el) el.scrollIntoView({ behavior: "smooth" });
     });
-    testimonialsBtn.addEventListener("click", () => {
-      const el = document.querySelector(".testimonials-section");
+    // testimonialsBtn.addEventListener("click", () => {
+    //   const el = document.querySelector(".testimonials-section");
+    //   if (el) el.scrollIntoView({ behavior: "smooth" });
+    // });
+    servicesBtn.addEventListener("click", () => {
+      const el = document.querySelector(".services-section");
       if (el) el.scrollIntoView({ behavior: "smooth" });
     });
-
+    techBtn.addEventListener("click", () => {
+      const el = document.querySelector(".tech-section");
+      if (el) el.scrollIntoView({ behavior: "smooth" });
+    });
     // Stop response — clears speech queue and stops audio
     stopBtn.addEventListener("click", () => {
       stopSpeech();
@@ -813,6 +826,50 @@
         resizeRenderer();
       }
     });
+
+    // Quick navigation buttons functionality
+document.querySelectorAll('.ai-avatar-nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const sectionId = btn.dataset.section;
+    
+    // Remove active state from all nav buttons
+    document.querySelectorAll('.ai-avatar-nav-btn').forEach(b => b.classList.remove('active'));
+    // Add active state to clicked button
+    btn.classList.add('active');
+    
+    // Scroll to section
+    let targetEl;
+    switch(sectionId) {
+      case 'services':
+        targetEl = document.getElementById('services');
+        break;
+      case 'hire':
+        targetEl = document.getElementById('hire');
+        break;
+      case 'solutions':
+        targetEl = document.getElementById('solutions');
+        break;
+      case 'company':
+        targetEl = document.getElementById('company');
+        break;
+      case 'contact':
+        targetEl = document.getElementById('contact');
+        break;
+      default:
+        targetEl = document.getElementById(sectionId);
+    }
+    
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      
+      // Optional: Close avatar after navigation
+      // setTimeout(() => {
+      //   avatarWrapper.classList.remove('open');
+      //   avatarBtn.classList.remove('hidden');
+      // }, 800);
+    }
+  });
+});
   </script>
 </body>
 </html>

@@ -17,7 +17,7 @@ let blink = false;
 let blinkTimeout = null;
 let avatarScene = null;
 let morphNameMap = {};
-
+const AVATAR_SCALE = 0.1;
 // Pose editor state — stores references to arm/hand bones for the control panel
 let poseBones = {};
 let poseRestQuaternions = {};
@@ -652,6 +652,7 @@ rightRing3: { x: 0.30, y: 0.00, z: 0.00 },
 rightPinky1: { x: 0.30, y: 0.00, z: 0.00 },
 rightPinky2: { x: 0.40, y: 0.00, z: 0.00 },
 rightPinky3: { x: 0.30, y: -0.42, z: -0.60 },
+
 };
 
 function findPoseBones(group) {
@@ -826,7 +827,10 @@ function loadAvatar(targetScene) {
         avatarScene = avatarGltf.scene;
         avatarGroup = new THREE.Group();
         avatarGroup.add(avatarScene);
+
+        avatarGroup.scale.setScalar(AVATAR_SCALE);
         scene.add(avatarGroup);
+        
 
         // Compute bounding box and position model so feet are at y=0
         avatarGroup.updateMatrixWorld(true);
