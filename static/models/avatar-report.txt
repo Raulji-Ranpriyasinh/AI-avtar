@@ -1,0 +1,644 @@
+AVATAR GLB INSPECTOR -- Report
+Generated: 2026-03-30T07:19:36.612Z
+File: C:\Users\Reyna\OneDrive - Reyna Solutions LLP\Documents\Dummy works\Avtar compaility\newav.glb
+
+================================================================
+  FILE INFO
+================================================================
+  [OK]   Path    : C:\Users\Reyna\OneDrive - Reyna Solutions LLP\Documents\Dummy works\Avtar compaility\newav.glb
+  [OK]   Size    : 13.997 MB  (1,46,77,328 bytes)
+  [OK]   GLB magic       : 0x46546C67  (valid Binary glTF)
+  [OK]   glTF version    : 2
+  [OK]   Reported length : 1,46,77,328 bytes
+
+  >> Extensions
+  [OK]   extensionsUsed     : KHR_materials_ior
+  [INFO] extensionsRequired : none
+
+================================================================
+  SCENE HIERARCHY
+================================================================
+  Group  Scene
+    Object3D  Armature
+      Bone  Hips [BONE]
+        Bone  LeftUpLeg [BONE]
+          Bone  LeftLeg [BONE]
+            Bone  LeftFoot [BONE]
+              Bone  LeftToeBase [BONE]
+        Bone  Spine [BONE]
+          Bone  Spine1 [BONE]
+            Bone  Spine2 [BONE]
+              Bone  Neck [BONE]
+                Bone  Head [BONE]
+                  Bone  LeftEye [BONE]
+                  Bone  RightEye [BONE]
+              Bone  LeftShoulder [BONE]
+                Bone  LeftArm [BONE]
+                  Bone  LeftForeArm [BONE]
+                    Bone  LeftHand [BONE]
+                      Bone  LeftHandIndex1 [BONE]
+                        Bone  LeftHandIndex2 [BONE]
+                          Bone  LeftHandIndex3 [BONE]
+                      Bone  LeftHandMiddle1 [BONE]
+                        Bone  LeftHandMiddle2 [BONE]
+                          Bone  LeftHandMiddle3 [BONE]
+                      Bone  LeftHandPinky1 [BONE]
+                        Bone  LeftHandPinky2 [BONE]
+                          Bone  LeftHandPinky3 [BONE]
+                      Bone  LeftHandRing1 [BONE]
+                        Bone  LeftHandRing2 [BONE]
+                          Bone  LeftHandRing3 [BONE]
+                      Bone  LeftHandThumb1 [BONE]
+                        Bone  LeftHandThumb2 [BONE]
+                          Bone  LeftHandThumb3 [BONE]
+              Bone  RightShoulder [BONE]
+                Bone  RightArm [BONE]
+                  Bone  RightForeArm [BONE]
+                    Bone  RightHand [BONE]
+                      Bone  RightHandIndex1 [BONE]
+                        Bone  RightHandIndex2 [BONE]
+                          Bone  RightHandIndex3 [BONE]
+                      Bone  RightHandMiddle1 [BONE]
+                        Bone  RightHandMiddle2 [BONE]
+                          Bone  RightHandMiddle3 [BONE]
+                      Bone  RightHandPinky1 [BONE]
+                        Bone  RightHandPinky2 [BONE]
+                          Bone  RightHandPinky3 [BONE]
+                      Bone  RightHandRing1 [BONE]
+                        Bone  RightHandRing2 [BONE]
+                          Bone  RightHandRing3 [BONE]
+                      Bone  RightHandThumb1 [BONE]
+                        Bone  RightHandThumb2 [BONE]
+                          Bone  RightHandThumb3 [BONE]
+        Bone  RightUpLeg [BONE]
+          Bone  RightLeg [BONE]
+            Bone  RightFoot [BONE]
+              Bone  RightToeBase [BONE]
+      SkinnedMesh  Body_Mesh [SKINNED_MESH]
+      SkinnedMesh  Eye_Mesh [SKINNED_MESH]
+      SkinnedMesh  EyeAO_Mesh [SKINNED_MESH]
+      SkinnedMesh  Eyelash_Mesh [SKINNED_MESH]
+      SkinnedMesh  Head_Mesh [SKINNED_MESH]
+      SkinnedMesh  Teeth_Mesh [SKINNED_MESH]
+      SkinnedMesh  Tongue_Mesh [SKINNED_MESH]
+      SkinnedMesh  avaturn_glasses_0 [SKINNED_MESH]
+      SkinnedMesh  avaturn_glasses_1 [SKINNED_MESH]
+      SkinnedMesh  avaturn_hair_0 [SKINNED_MESH]
+      SkinnedMesh  avaturn_shoes_0 [SKINNED_MESH]
+      SkinnedMesh  avaturn_look_0 [SKINNED_MESH]
+
+================================================================
+  MESHES
+================================================================
+
+  >> Mesh 1: "Body_Mesh"
+     Vertices                        3212
+     Is SkinnedMesh                  YES
+     Morph targets                   0
+     Geo attributes                  position, normal, uv, skinIndex, skinWeight
+
+     Material: "Body"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   side=Double
+
+  >> Mesh 2: "Eye_Mesh"
+     Vertices                        196
+     Is SkinnedMesh                  YES
+     Morph targets                   11
+     Geo attributes                  position, normal, uv, skinIndex, skinWeight
+
+     MORPH TARGETS (Blend Shapes)
+     ----------------------------------------------------
+         [  0]  eyeLookDownLeft      default = 0.0000
+         [  1]  eyeLookDownRight     default = 0.0000
+         [  2]  eyeLookUpLeft        default = 0.0000
+         [  3]  eyeLookUpRight       default = 0.0000
+         [  4]  eyeLookInLeft        default = 0.0000
+         [  5]  eyeLookInRight       default = 0.0000
+         [  6]  eyeLookOutLeft       default = 0.0000
+         [  7]  eyeLookOutRight      default = 0.0000
+         [  8]  eyesClosed           default = 0.0000
+         [  9]  eyesLookUp           default = 0.0000
+         [ 10]  eyesLookDown         default = 0.0000
+
+     Material: "Eyes"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   side=Double
+
+  >> Mesh 3: "EyeAO_Mesh"
+     Vertices                        182
+     Is SkinnedMesh                  YES
+     Morph targets                   32
+     Geo attributes                  position, normal, uv, uv1, skinIndex, skinWeight
+
+     MORPH TARGETS (Blend Shapes)
+     ----------------------------------------------------
+         [  0]  browDownLeft         default = 0.0000
+         [  1]  browDownRight        default = 0.0000
+         [  2]  browInnerUp          default = 0.0000
+         [  3]  browOuterUpLeft      default = 0.0000
+         [  4]  browOuterUpRight     default = 0.0000
+         [  5]  eyeSquintLeft        default = 0.0000
+         [  6]  eyeSquintRight       default = 0.0000
+         [  7]  noseSneerLeft        default = 0.0000
+         [  8]  noseSneerRight       default = 0.0000
+         [  9]  cheekPuff            default = 0.0000
+         [ 10]  cheekSquintLeft      default = 0.0000
+         [ 11]  cheekSquintRight     default = 0.0000
+         [ 12]  mouthSmile           default = 0.0000
+         [ 13]  mouthLeft            default = 0.0000
+         [ 14]  mouthRight           default = 0.0000
+         [ 15]  mouthSmileLeft       default = 0.0000
+         [ 16]  mouthSmileRight      default = 0.0000
+         [ 17]  eyeWideLeft          default = 0.0000
+         [ 18]  eyeWideRight         default = 0.0000
+         [ 19]  eyeLookDownLeft      default = 0.0000
+         [ 20]  eyeLookDownRight     default = 0.0000
+         [ 21]  eyeLookUpLeft        default = 0.0000
+         [ 22]  eyeLookUpRight       default = 0.0000
+         [ 23]  eyeLookInLeft        default = 0.0000
+         [ 24]  eyeLookInRight       default = 0.0000
+         [ 25]  eyeLookOutLeft       default = 0.0000
+         [ 26]  eyeLookOutRight      default = 0.0000
+         [ 27]  eyeBlinkLeft         default = 0.0000
+         [ 28]  eyeBlinkRight        default = 0.0000
+         [ 29]  eyesClosed           default = 0.0000
+         [ 30]  eyesLookUp           default = 0.0000
+         [ 31]  eyesLookDown         default = 0.0000
+
+     Material: "EyeAO"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   transparent=true   side=Double
+
+  >> Mesh 4: "Eyelash_Mesh"
+     Vertices                        242
+     Is SkinnedMesh                  YES
+     Morph targets                   31
+     Geo attributes                  position, normal, uv, skinIndex, skinWeight
+
+     MORPH TARGETS (Blend Shapes)
+     ----------------------------------------------------
+         [  0]  browDownLeft         default = 0.0000
+         [  1]  browDownRight        default = 0.0000
+         [  2]  browInnerUp          default = 0.0000
+         [  3]  browOuterUpLeft      default = 0.0000
+         [  4]  browOuterUpRight     default = 0.0000
+         [  5]  eyeSquintLeft        default = 0.0000
+         [  6]  eyeSquintRight       default = 0.0000
+         [  7]  eyeWideLeft          default = 0.0000
+         [  8]  eyeWideRight         default = 0.0000
+         [  9]  noseSneerLeft        default = 0.0000
+         [ 10]  noseSneerRight       default = 0.0000
+         [ 11]  eyeLookDownLeft      default = 0.0000
+         [ 12]  eyeLookDownRight     default = 0.0000
+         [ 13]  eyeLookUpLeft        default = 0.0000
+         [ 14]  eyeLookUpRight       default = 0.0000
+         [ 15]  eyeLookInLeft        default = 0.0000
+         [ 16]  eyeLookInRight       default = 0.0000
+         [ 17]  eyeLookOutLeft       default = 0.0000
+         [ 18]  eyeLookOutRight      default = 0.0000
+         [ 19]  cheekSquintLeft      default = 0.0000
+         [ 20]  cheekSquintRight     default = 0.0000
+         [ 21]  eyeBlinkLeft         default = 0.0000
+         [ 22]  eyeBlinkRight        default = 0.0000
+         [ 23]  eyesClosed           default = 0.0000
+         [ 24]  eyesLookUp           default = 0.0000
+         [ 25]  eyesLookDown         default = 0.0000
+         [ 26]  mouthSmile           default = 0.0000
+         [ 27]  mouthSmileLeft       default = 0.0000
+         [ 28]  mouthSmileRight      default = 0.0000
+         [ 29]  mouthUpperUpLeft     default = 0.0000
+         [ 30]  mouthUpperUpRight    default = 0.0000
+
+     Material: "Eyelash"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   transparent=true   side=Double
+
+  >> Mesh 5: "Head_Mesh"
+     Vertices                        4354
+     Is SkinnedMesh                  YES
+     Morph targets                   72
+     Geo attributes                  position, normal, uv, skinIndex, skinWeight
+
+     MORPH TARGETS (Blend Shapes)
+     ----------------------------------------------------
+         [  0]  mouthOpen            default = 0.0000
+         [  1]  viseme_sil           default = 0.0000
+         [  2]  viseme_PP            default = 0.0000
+         [  3]  viseme_FF            default = 0.0000
+         [  4]  viseme_TH            default = 0.0000
+         [  5]  eyeWideLeft          default = 0.0000
+         [  6]  eyeWideRight         default = 0.0000
+         [  7]  eyeLookDownLeft      default = 0.0000
+         [  8]  eyeLookDownRight     default = 0.0000
+         [  9]  eyeLookUpLeft        default = 0.0000
+         [ 10]  eyeLookUpRight       default = 0.0000
+         [ 11]  eyeLookInLeft        default = 0.0000
+         [ 12]  eyeLookInRight       default = 0.0000
+         [ 13]  eyeLookOutLeft       default = 0.0000
+         [ 14]  eyeLookOutRight      default = 0.0000
+         [ 15]  cheekSquintLeft      default = 0.0000
+         [ 16]  cheekSquintRight     default = 0.0000
+         [ 17]  mouthRollUpper       default = 0.0000
+         [ 18]  eyeBlinkLeft         default = 0.0000
+         [ 19]  eyeBlinkRight        default = 0.0000
+         [ 20]  eyesClosed           default = 0.0000
+         [ 21]  eyesLookUp           default = 0.0000
+         [ 22]  eyesLookDown         default = 0.0000
+         [ 23]  mouthClose           default = 0.0000
+         [ 24]  mouthFrownLeft       default = 0.0000
+         [ 25]  mouthFrownRight      default = 0.0000
+         [ 26]  mouthFunnel          default = 0.0000
+         [ 27]  mouthPressLeft       default = 0.0000
+         [ 28]  mouthPressRight      default = 0.0000
+         [ 29]  mouthStretchLeft     default = 0.0000
+         [ 30]  mouthStretchRight    default = 0.0000
+         [ 31]  tongueOut            default = 0.0000
+         [ 32]  mouthDimpleLeft      default = 0.0000
+         [ 33]  mouthDimpleRight     default = 0.0000
+         [ 34]  jawLeft              default = 0.0000
+         [ 35]  jawRight             default = 0.0000
+         [ 36]  eyeSquintLeft        default = 0.0000
+         [ 37]  eyeSquintRight       default = 0.0000
+         [ 38]  mouthLowerDownLeft   default = 0.0000
+         [ 39]  mouthLowerDownRight  default = 0.0000
+         [ 40]  mouthUpperUpLeft     default = 0.0000
+         [ 41]  mouthUpperUpRight    default = 0.0000
+         [ 42]  mouthSmileLeft       default = 0.0000
+         [ 43]  mouthSmileRight      default = 0.0000
+         [ 44]  mouthLeft            default = 0.0000
+         [ 45]  mouthRight           default = 0.0000
+         [ 46]  mouthPucker          default = 0.0000
+         [ 47]  mouthSmile           default = 0.0000
+         [ 48]  jawForward           default = 0.0000
+         [ 49]  jawOpen              default = 0.0000
+         [ 50]  mouthRollLower       default = 0.0000
+         [ 51]  cheekPuff            default = 0.0000
+         [ 52]  noseSneerRight       default = 0.0000
+         [ 53]  noseSneerLeft        default = 0.0000
+         [ 54]  mouthShrugLower      default = 0.0000
+         [ 55]  mouthShrugUpper      default = 0.0000
+         [ 56]  viseme_DD            default = 0.0000
+         [ 57]  viseme_kk            default = 0.0000
+         [ 58]  viseme_CH            default = 0.0000
+         [ 59]  viseme_SS            default = 0.0000
+         [ 60]  viseme_nn            default = 0.0000
+         [ 61]  viseme_RR            default = 0.0000
+         [ 62]  viseme_aa            default = 0.0000
+         [ 63]  viseme_E             default = 0.0000
+         [ 64]  viseme_I             default = 0.0000
+         [ 65]  viseme_O             default = 0.0000
+         [ 66]  viseme_U             default = 0.0000
+         [ 67]  browDownLeft         default = 0.0000
+         [ 68]  browDownRight        default = 0.0000
+         [ 69]  browInnerUp          default = 0.0000
+         [ 70]  browOuterUpLeft      default = 0.0000
+         [ 71]  browOuterUpRight     default = 0.0000
+
+     Material: "Head"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   side=Front
+
+  >> Mesh 6: "Teeth_Mesh"
+     Vertices                        909
+     Is SkinnedMesh                  YES
+     Morph targets                   20
+     Geo attributes                  position, normal, uv, skinIndex, skinWeight
+
+     MORPH TARGETS (Blend Shapes)
+     ----------------------------------------------------
+         [  0]  mouthOpen            default = 0.0000
+         [  1]  viseme_sil           default = 0.0000
+         [  2]  viseme_PP            default = 0.0000
+         [  3]  viseme_FF            default = 0.0000
+         [  4]  viseme_TH            default = 0.0000
+         [  5]  viseme_DD            default = 0.0000
+         [  6]  viseme_kk            default = 0.0000
+         [  7]  viseme_CH            default = 0.0000
+         [  8]  viseme_SS            default = 0.0000
+         [  9]  viseme_nn            default = 0.0000
+         [ 10]  viseme_RR            default = 0.0000
+         [ 11]  viseme_aa            default = 0.0000
+         [ 12]  viseme_E             default = 0.0000
+         [ 13]  viseme_I             default = 0.0000
+         [ 14]  viseme_O             default = 0.0000
+         [ 15]  viseme_U             default = 0.0000
+         [ 16]  jawOpen              default = 0.0000
+         [ 17]  jawForward           default = 0.0000
+         [ 18]  jawLeft              default = 0.0000
+         [ 19]  jawRight             default = 0.0000
+
+     Material: "Teeth"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   side=Double
+
+  >> Mesh 7: "Tongue_Mesh"
+     Vertices                        96
+     Is SkinnedMesh                  YES
+     Morph targets                   21
+     Geo attributes                  position, normal, uv, skinIndex, skinWeight
+
+     MORPH TARGETS (Blend Shapes)
+     ----------------------------------------------------
+         [  0]  mouthOpen            default = 0.6000
+         [  1]  viseme_sil           default = 0.0000
+         [  2]  viseme_PP            default = 0.0000
+         [  3]  viseme_FF            default = 0.0000
+         [  4]  viseme_TH            default = 0.0000
+         [  5]  viseme_DD            default = 0.0000
+         [  6]  viseme_kk            default = 0.0000
+         [  7]  viseme_CH            default = 0.0000
+         [  8]  viseme_SS            default = 0.0000
+         [  9]  viseme_nn            default = 0.0000
+         [ 10]  viseme_RR            default = 0.0000
+         [ 11]  viseme_aa            default = 0.0000
+         [ 12]  viseme_E             default = 0.0000
+         [ 13]  viseme_I             default = 0.0000
+         [ 14]  viseme_O             default = 0.0000
+         [ 15]  viseme_U             default = 0.0000
+         [ 16]  jawOpen              default = 0.0000
+         [ 17]  jawForward           default = 0.0000
+         [ 18]  jawLeft              default = 0.0000
+         [ 19]  jawRight             default = 0.0000
+         [ 20]  tongueOut            default = 0.0000
+
+     Material: "Teeth"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   side=Double
+
+  >> Mesh 8: "avaturn_glasses_0"
+     Vertices                        1693
+     Is SkinnedMesh                  YES
+     Morph targets                   0
+     Geo attributes                  position, normal, uv, skinIndex, skinWeight
+
+     Material: "avaturn_glasses_0_material"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   side=Double
+
+  >> Mesh 9: "avaturn_glasses_1"
+     Vertices                        50
+     Is SkinnedMesh                  YES
+     Morph targets                   0
+     Geo attributes                  position, normal, uv, skinIndex, skinWeight
+
+     Material: "avaturn_glasses_1_material"
+     type=MeshPhysicalMaterial   color=#ffffff   roughness=0.00   metalness=0.00   transparent=true   opacity=0.10   side=Double
+
+  >> Mesh 10: "avaturn_hair_0"
+     Vertices                        740
+     Is SkinnedMesh                  YES
+     Morph targets                   0
+     Geo attributes                  position, normal, uv, skinIndex, skinWeight
+
+     Material: "avaturn_hair_0_material"
+     type=MeshStandardMaterial   color=#ffffff   roughness=0.85   metalness=0.15   transparent=true   side=Front
+
+  >> Mesh 11: "avaturn_shoes_0"
+     Vertices                        4164
+     Is SkinnedMesh                  YES
+     Morph targets                   0
+     Geo attributes                  position, normal, uv, skinIndex, skinWeight
+
+     Material: "avaturn_shoes_0_material"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   side=Double
+
+  >> Mesh 12: "avaturn_look_0"
+     Vertices                        4972
+     Is SkinnedMesh                  YES
+     Morph targets                   0
+     Geo attributes                  position, normal, uv, skinIndex, skinWeight
+
+     Material: "avaturn_look_0_material"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   side=Double
+
+================================================================
+  SKELETON & BONES
+================================================================
+
+  >> Skeleton for "Body_Mesh"
+  [OK]   Total bones : 54
+
+  [  0]  Hips
+    [ 44]  LeftUpLeg
+      [ 45]  LeftLeg
+        [ 46]  LeftFoot
+          [ 47]  LeftToeBase
+    [  1]  Spine
+      [  2]  Spine1
+        [  3]  Spine2
+          [  4]  Neck
+            [  5]  Head
+              [ 52]  LeftEye
+              [ 53]  RightEye
+          [  6]  LeftShoulder
+            [  7]  LeftArm
+              [  8]  LeftForeArm
+                [  9]  LeftHand
+                  [ 13]  LeftHandIndex1
+                    [ 14]  LeftHandIndex2
+                      [ 15]  LeftHandIndex3
+                  [ 16]  LeftHandMiddle1
+                    [ 17]  LeftHandMiddle2
+                      [ 18]  LeftHandMiddle3
+                  [ 22]  LeftHandPinky1
+                    [ 23]  LeftHandPinky2
+                      [ 24]  LeftHandPinky3
+                  [ 19]  LeftHandRing1
+                    [ 20]  LeftHandRing2
+                      [ 21]  LeftHandRing3
+                  [ 10]  LeftHandThumb1
+                    [ 11]  LeftHandThumb2
+                      [ 12]  LeftHandThumb3
+          [ 25]  RightShoulder
+            [ 26]  RightArm
+              [ 27]  RightForeArm
+                [ 28]  RightHand
+                  [ 32]  RightHandIndex1
+                    [ 33]  RightHandIndex2
+                      [ 34]  RightHandIndex3
+                  [ 35]  RightHandMiddle1
+                    [ 36]  RightHandMiddle2
+                      [ 37]  RightHandMiddle3
+                  [ 41]  RightHandPinky1
+                    [ 42]  RightHandPinky2
+                      [ 43]  RightHandPinky3
+                  [ 38]  RightHandRing1
+                    [ 39]  RightHandRing2
+                      [ 40]  RightHandRing3
+                  [ 29]  RightHandThumb1
+                    [ 30]  RightHandThumb2
+                      [ 31]  RightHandThumb3
+    [ 48]  RightUpLeg
+      [ 49]  RightLeg
+        [ 50]  RightFoot
+          [ 51]  RightToeBase
+
+================================================================
+  MATERIALS & TEXTURES
+================================================================
+  [OK]   Unique materials : 12
+
+  >> Material 1: "Body"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   side=Double
+
+  >> Material 2: "Eyes"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   side=Double
+
+  >> Material 3: "EyeAO"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   transparent=true   side=Double
+
+  >> Material 4: "Eyelash"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   transparent=true   side=Double
+
+  >> Material 5: "Head"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   side=Front
+
+  >> Material 6: "Teeth"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   side=Double
+
+  >> Material 7: "Teeth"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   side=Double
+
+  >> Material 8: "avaturn_glasses_0_material"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   side=Double
+
+  >> Material 9: "avaturn_glasses_1_material"
+     type=MeshPhysicalMaterial   color=#ffffff   roughness=0.00   metalness=0.00   transparent=true   opacity=0.10   side=Double
+
+  >> Material 10: "avaturn_hair_0_material"
+     type=MeshStandardMaterial   color=#ffffff   roughness=0.85   metalness=0.15   transparent=true   side=Front
+
+  >> Material 11: "avaturn_shoes_0_material"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   side=Double
+
+  >> Material 12: "avaturn_look_0_material"
+     type=MeshStandardMaterial   color=#ffffff   roughness=1.00   metalness=1.00   side=Double
+
+================================================================
+  ANIMATIONS
+================================================================
+  [OK]   Total animations : 1
+
+  >> Animation 0: "avaturn_animation"   duration=8.083s   tracks=59
+       position                      1 track(s)
+       quaternion                    52 track(s)
+       morphTargetInfluences         6 track(s)
+
+     All tracks:
+       - Hips.position
+       - Hips.quaternion
+       - LeftUpLeg.quaternion
+       - LeftLeg.quaternion
+       - LeftFoot.quaternion
+       - LeftToeBase.quaternion
+       - RightUpLeg.quaternion
+       - RightLeg.quaternion
+       - RightFoot.quaternion
+       - RightToeBase.quaternion
+       - Spine.quaternion
+       - Spine1.quaternion
+       - Spine2.quaternion
+       - Neck.quaternion
+       - Head.quaternion
+       - LeftShoulder.quaternion
+       - LeftArm.quaternion
+       - LeftForeArm.quaternion
+       - LeftHand.quaternion
+       - LeftHandIndex1.quaternion
+       - LeftHandIndex2.quaternion
+       - LeftHandIndex3.quaternion
+       - LeftHandMiddle1.quaternion
+       - LeftHandMiddle2.quaternion
+       - LeftHandMiddle3.quaternion
+       - LeftHandPinky1.quaternion
+       - LeftHandPinky2.quaternion
+       - LeftHandPinky3.quaternion
+       - LeftHandRing1.quaternion
+       - LeftHandRing2.quaternion
+       - LeftHandRing3.quaternion
+       - LeftHandThumb1.quaternion
+       - LeftHandThumb2.quaternion
+       - LeftHandThumb3.quaternion
+       - RightShoulder.quaternion
+       - RightArm.quaternion
+       - RightForeArm.quaternion
+       - RightHand.quaternion
+       - RightHandIndex1.quaternion
+       - RightHandIndex2.quaternion
+       - RightHandIndex3.quaternion
+       - RightHandMiddle1.quaternion
+       - RightHandMiddle2.quaternion
+       - RightHandMiddle3.quaternion
+       - RightHandPinky1.quaternion
+       - RightHandPinky2.quaternion
+       - RightHandPinky3.quaternion
+       - RightHandRing1.quaternion
+       - RightHandRing2.quaternion
+       - RightHandRing3.quaternion
+       - RightHandThumb1.quaternion
+       - RightHandThumb2.quaternion
+       - RightHandThumb3.quaternion
+       - Eye_Mesh.morphTargetInfluences
+       - Eyelash_Mesh.morphTargetInfluences
+       - Head_Mesh.morphTargetInfluences
+       - Teeth_Mesh.morphTargetInfluences
+       - Tongue_Mesh.morphTargetInfluences
+       - EyeAO_Mesh.morphTargetInfluences
+
+================================================================
+  GLTF ASSET METADATA
+================================================================
+     generator                       Avaturn.me | Blender
+     version                         2.0
+     copyright                       --
+     minVersion                      --
+
+  Root extras:
+{
+    "created_by": "Avaturn.me",
+    "created_at": "2026-03-30T07:05:26.615Z",
+    "look_alias": "shirt_and_jeans_white"
+}
+
+================================================================
+  QUICK STATS SUMMARY
+================================================================
+     Total meshes                    12
+     Total vertices                  20,810
+     Total morph targets             187
+     Total unique bones              54
+     Unique materials                12
+     Animations                      1
+     Extensions used                 KHR_materials_ior
+
+================================================================
+  RECONSTRUCTION CHECKLIST
+================================================================
+
+  To recreate this avatar with a DIFFERENT APPEARANCE:
+
+  GEOMETRY
+  +-- Same mesh topology (vertex count + face indices must match)
+  +-- Same UV layout (all UV channels listed above)
+  +-- Same attribute channels (JOINTS_0, WEIGHTS_0 for skinning)
+  +-- Same morph target names + count  (187 total)
+
+  SKELETON
+  +-- Same bone names in the same hierarchy
+  +-- Same bind pose (rest-pose matrices)
+
+  MATERIALS  <-- change these for a new look
+  +-- Diffuse / albedo texture   swap for new skin / outfit
+  +-- Normal map                 keep or replace
+  +-- Roughness / metalness      tweak for different materials
+  +-- Emissive map               add for glowing parts
+
+  ANIMATIONS
+  +-- Track names must reference bone names exactly as listed above
+
+  COMPRESSION
+  +-- File uses EXT_meshopt_compression
+      Re-export with same flag, or disable for simpler tooling.
+
+  RECOMMENDED TOOLS
+  +-- Blender 3.3+           import GLB -> edit -> export GLB
+  +-- gltf-transform CLI     npm i -g @gltf-transform/cli
+  +-- Three.js editor        https://threejs.org/editor/
+  +-- Babylon.js sandbox     https://sandbox.babylonjs.com/
+
+================================================================
+  INSPECTION COMPLETE
+================================================================
